@@ -137,11 +137,11 @@ void fetchCommands() {
     DeserializationError error = deserializeJson(doc, response);
     
     if (!error) {
-      applyActuators(doc["actuators"]["buzzer"], doc["actuators"]["leds"], doc["actuators"]["relay"]);
+      applyActuators(doc["buzzer"], doc["led"], doc["relay_cutoff"]);
       
       // If we got a command, acknowledge it
-      if (doc["id"]) {
-        String cmdId = doc["id"];
+      if (doc["command_id"] && !doc["command_id"].isNull()) {
+        String cmdId = doc["command_id"];
         acknowledgeCommand(cmdId);
       }
     }
@@ -155,9 +155,14 @@ void applyActuators(bool buzzer, const char* leds, bool relay) {
   digitalWrite(PIN_LED_WARN, LOW);
   digitalWrite(PIN_LED_CRIT, LOW);
 
-  if (String(leds) == "green") digitalWrite(PIN_LED_SAFE, HIGH);
-  else if (String(leds) == "yellow") digitalWrite(PIN_LED_WARN, HIGH);
-  else if (String(leds) == "red") digitalWrite(PIN_LED_CRIT, HIGH);
+  if (leds != nullptr) {
+    String ledColor = String(leds);
+    ledColor.toUpperCase();
+
+    if (ledColor == "GREEN") digitalWrite(PIN_LED_SAFE, HIGH);
+    else if (ledColor == "YELLOW") digitalWrite(PIN_LED_WARN, HIGH);
+    else if (ledColor == "RED") digitalWrite(PIN_LED_CRIT, HIGH);
+  }
 
   // Update Buzzer & Relay (PDF Section 06, TC5)
   digitalWrite(PIN_BUZZER, buzzer ? HIGH : LOW);
