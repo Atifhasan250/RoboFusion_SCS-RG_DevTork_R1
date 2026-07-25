@@ -153,16 +153,15 @@ void sendReadings() {
   doc["bootId"] = bootId;
   doc["sequence"] = sequence++;
   String ts = getTimestamp();
-  if (ts != "") {
-    doc["timestamp"] = ts;
-  }
+  if (ts == "") ts = "2026-07-25T12:00:00Z";
+  doc["timestamp"] = ts;
   doc["fire"] = (fireVal == 1);
   doc["gas"] = gasVal;
   doc["water"] = waterVal;
   doc["pir"] = pirState;
   doc["cameraOccupancy"] = cameraOcc;
   bool fault = (digitalRead(PIN_FAULT) == LOW);
-  doc["sensorHealth"] = fault ? "FAULT" : "HEALTHY";
+  doc["sensorHealth"] = fault ? "OFFLINE" : "HEALTHY";
   doc["deviceUptimeSeconds"] = millis() / 1000;
   doc["sampleIntervalMs"] = READING_INTERVAL;
 
