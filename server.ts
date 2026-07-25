@@ -1,0 +1,105 @@
+import { createServer } from "node:http";
+import next from "next";
+import { WebSocketServer, type WebSocket } from "ws";
+import { realtime } from "./src/server/realtime/hub";
+import { collections } from "./src/server/db/collections";
+import { markOfflineZones } from "./src/server/services/offline-service";
+import { recoverSystemState } from "./src/server/services/recovery-service";
+import { id } from "./src/server/utils/id";
+
+const dev = process.env.NODE_ENV !== "production";
+const app = next({ dev });
+const handler = app.getRequestHandler();
+
+async function sendSnapshot(socket: WebSocket) {
+  const c = await collections();
+  const [zones, incidents] = await Promise.all([
+    c.zones.find({}, { projection: { _id: 0, apiKeyHash: 0 } }).toArray(),
+    c.incidents.find({ active: true }, { projection: { _id: 0 } }).toArray(),
+  ]);
+  socket.send(JSON.stringify({
+    event_id: id(),
+    event_type: "SNAPSHOT",
+    occurred_at: new Date().toISOString(),
+    data: {
+      zones,
+      incidents,
+      server_time: new Date().toISOString(),
+    },
+    version: 0,
+  }));
+}
+
+async function main() {
+  await app.prepare();
+  await recoverSystemState();
+
+  // Mark offline zones every 5s
+  setInterval(() => {
+    markOfflineZones().catch(error => console.error("offline-check-failed", error));
+  }, 5_000).unref();
+
+  const server = createServer(handler);
+  const wss = new WebSocketServer({ noServer: true });
+
+  wss.on("connection", async (socket) => {
+    // Send full snapshot on connect
+    await sendSnapshot(socket);
+
+    // Forward all realtime events with standardised envelope
+    const unsubscribe = realtime.subscribe((event, payload) => {
+      if (socket.readyState !== socket.OPEN) return;
+      // payload should already be a proper event envelope from services
+      socket.send(JSON.stringify(payload));
+    });
+
+    socket.on("close", unsubscribe);
+    socket.on("error", (err) => {
+      console.error("ws-client-error", err.message);
+      unsubscribe();
+    });
+  });
+
+  // Auth guard on WS upgrade
+  server.on("upgrade", async (request, socket, head) => {
+    if (!request.url?.startsWith("/ws")) {
+      socket.destroy();
+      return;
+    }
+
+    try {
+      const cookieHeader = request.headers.cookie ?? "";
+      const sessionId = /(?:^|; )scs_session=([^;]+)/.exec(cookieHeader)?.[1];
+
+      const c = await collections();
+      const session = sessionId
+        ? await c.sessions.findOne({ id: sessionId, expiresAt: { $gt: new Date() } })
+        : null;
+      const user = session
+        ? await c.users.findOne({ id: session.userId, active: true })
+        : null;
+
+      if (!user) {
+        socket.write("HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n");
+        socket.destroy();
+        return;
+      }
+
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit("connection", ws, request);
+      });
+    } catch (err) {
+      console.error("ws-upgrade-error", err);
+      socket.destroy();
+    }
+  });
+
+  server.listen(Number(process.env.PORT ?? 3000), () => {
+    console.log(`SCS-RG server listening on port ${process.env.PORT ?? 3000}`);
+  });
+}
+
+main().catch(error => {
+  console.error("Fatal startup error:", error);
+  process.exit(1);
+});
