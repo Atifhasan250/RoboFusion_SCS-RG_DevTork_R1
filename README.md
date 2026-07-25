@@ -1,6 +1,6 @@
 # RoboFusion 1.0 — SCS-RG Hackathon Submission
 **Team:** DevTork  
-**Track:** Track B (Full-stack Backend + Wokwi Simulation)
+**Track:** Full-stack Backend + Wokwi Simulation
 
 ![System Status](https://img.shields.io/badge/Backend-100%25_Ready-brightgreen)
 ![Tests](https://img.shields.io/badge/Tests-Passing-success)
