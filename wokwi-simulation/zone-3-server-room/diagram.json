@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "author": "DevTork",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-pir-motion-sensor", "id": "pir", "top": -150, "left": -200, "attrs": {} },
+    { "type": "wokwi-slide-switch", "id": "sw_fire", "top": 100, "left": -200, "attrs": { "label": "Flame Sensor" } },
+    { "type": "wokwi-potentiometer", "id": "pot_gas", "top": 200, "left": -200, "attrs": { "label": "Gas (MQ-2)" } },
+    { "type": "wokwi-potentiometer", "id": "pot_water", "top": 300, "left": -200, "attrs": { "label": "Water Level" } },
+    { "type": "wokwi-slide-switch", "id": "sw_cam", "top": -50, "left": -200, "attrs": { "label": "Camera Occ (Bonus)" } },
+    { "type": "wokwi-led", "id": "led_g", "top": -100, "left": 250, "attrs": { "color": "green", "label": "SAFE" } },
+    { "type": "wokwi-led", "id": "led_y", "top": -100, "left": 300, "attrs": { "color": "yellow", "label": "WARN" } },
+    { "type": "wokwi-led", "id": "led_r", "top": -100, "left": 350, "attrs": { "color": "red", "label": "CRIT" } },
+    { "type": "wokwi-buzzer", "id": "bz", "top": 0, "left": 300, "attrs": { "volume": "0.1" } },
+    { "type": "wokwi-relay-module", "id": "relay", "top": 150, "left": 250, "attrs": {} }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    
+    [ "esp:GND.1", "pir:GND", "black", ["v0"] ],
+    [ "esp:3V3", "pir:VCC", "red", ["v0"] ],
+    [ "esp:12", "pir:OUT", "magenta", ["v0"] ],
+    
+    [ "esp:GND.1", "sw_fire:1", "black", ["v0"] ],
+    [ "esp:13", "sw_fire:2", "orange", ["v0"] ],
+    
+    [ "esp:GND.1", "sw_cam:1", "black", ["v0"] ],
+    [ "esp:21", "sw_cam:2", "orange", ["v0"] ],
+    
+    [ "esp:GND.1", "pot_gas:GND", "black", ["v0"] ],
+    [ "esp:3V3", "pot_gas:VCC", "red", ["v0"] ],
+    [ "esp:34", "pot_gas:SIG", "purple", ["v0"] ],
+    
+    [ "esp:GND.1", "pot_water:GND", "black", ["v0"] ],
+    [ "esp:3V3", "pot_water:VCC", "red", ["v0"] ],
+    [ "esp:35", "pot_water:SIG", "cyan", ["v0"] ],
+    
+    [ "esp:GND.2", "led_g:C", "black", ["v0"] ],
+    [ "esp:25", "led_g:A", "green", ["v0"] ],
+    
+    [ "esp:GND.2", "led_y:C", "black", ["v0"] ],
+    [ "esp:26", "led_y:A", "yellow", ["v0"] ],
+    
+    [ "esp:GND.2", "led_r:C", "black", ["v0"] ],
+    [ "esp:27", "led_r:A", "red", ["v0"] ],
+    
+    [ "esp:GND.2", "bz:1", "black", ["v0"] ],
+    [ "esp:14", "bz:2", "blue", ["v0"] ],
+    
+    [ "esp:GND.2", "relay:GND", "black", ["v0"] ],
+    [ "esp:5V", "relay:VCC", "red", ["v0"] ],
+    [ "esp:32", "relay:IN", "white", ["v0"] ]
+  ],
+  "dependencies": {}
+}
