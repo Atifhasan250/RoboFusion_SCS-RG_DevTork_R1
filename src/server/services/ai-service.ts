@@ -19,11 +19,11 @@ const prompt = (text: string) =>
 
 Report: ${text}`;
 
-async function withTimeout<T>(fn: () => Promise<T>, ms: number): Promise<T> {
+async function withTimeout<T>(fn: (signal: AbortSignal) => Promise<T>, ms: number): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
   try {
-    return await fn();
+    return await fn(controller.signal);
   } finally {
     clearTimeout(timer);
   }
@@ -31,7 +31,7 @@ async function withTimeout<T>(fn: () => Promise<T>, ms: number): Promise<T> {
 
 async function callGemini(text: string): Promise<z.infer<typeof signalSchema>> {
   if (!env.GEMINI_API_KEY) throw new Error("GEMINI_NOT_CONFIGURED");
-  const r = await withTimeout(async () => {
+  const r = await withTimeout(async (signal) => {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL}:generateContent?key=${env.GEMINI_API_KEY}`,
       {
@@ -41,6 +41,7 @@ async function callGemini(text: string): Promise<z.infer<typeof signalSchema>> {
           contents: [{ parts: [{ text: prompt(text) }] }],
           generationConfig: { temperature: 0, responseMimeType: "application/json" },
         }),
+        signal
       }
     );
     if (!res.ok) throw new Error(`GEMINI_${res.status}`);
@@ -52,7 +53,7 @@ async function callGemini(text: string): Promise<z.infer<typeof signalSchema>> {
 
 async function callOpenRouter(text: string): Promise<z.infer<typeof signalSchema>> {
   if (!env.OPENROUTER_API_KEY) throw new Error("OPENROUTER_NOT_CONFIGURED");
-  const r = await withTimeout(async () => {
+  const r = await withTimeout(async (signal) => {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -65,6 +66,7 @@ async function callOpenRouter(text: string): Promise<z.infer<typeof signalSchema
         temperature: 0,
         response_format: { type: "json_object" },
       }),
+      signal
     });
     if (!res.ok) throw new Error(`OPENROUTER_${res.status}`);
     const data = await res.json() as { choices?: { message?: { content?: string } }[] };
@@ -79,17 +81,19 @@ function deterministicParse(text: string): z.infer<typeof signalSchema> {
     : /robot/i.test(text) ? "ROBOTICS_LAB"
     : /data.science/i.test(text) ? "DATA_SCIENCE_LAB"
     : /software/i.test(text) ? "SOFTWARE_LAB"
-    : "IOT_LAB";
+    : /iot/i.test(text) ? "IOT_LAB"
+    : "UNKNOWN";
   const hazard =
     /gas|smell|fume|carbon/i.test(text) ? "GAS"
     : /water|leak|flood|wet/i.test(text) ? "FLOOD"
     : /fire|smoke|flame|burn/i.test(text) ? "FIRE"
-    : "OCCUPANCY";
+    : /occupancy|person|people|intruder/i.test(text) ? "OCCUPANCY"
+    : "UNKNOWN";
   const severity =
     /urgent|strong|heavy|critical|emergency/i.test(text) ? "HIGH"
     : /moderate|medium|some|possible/i.test(text) ? "MEDIUM"
     : "LOW";
-  return { zoneCode, hazard, severity, summary: text.slice(0, 200).trim() };
+  return { zoneCode: zoneCode as any, hazard: hazard as any, severity, summary: text.slice(0, 200).trim() };
 }
 
 export async function parseIncidentNote(text: string): Promise<{ signal: z.infer<typeof signalSchema>; provider: string }> {
@@ -112,6 +116,9 @@ export async function parseIncidentNote(text: string): Promise<{ signal: z.infer
 
   // Deterministic fallback — never throws
   const signal = deterministicParse(text);
+  if (signal.zoneCode as string === "UNKNOWN" || signal.hazard as string === "UNKNOWN") {
+    throw new Error("AMBIGUOUS_REPORT");
+  }
   log("NLP_VALIDATED", { provider: "deterministic", status: "accepted" });
   return { signal, provider: "deterministic" };
 }

@@ -87,18 +87,27 @@ export async function priorityQueue() {
       { $unwind: "$zone" },
       { $lookup: { from: "zone_states", localField: "zoneId", foreignField: "zoneId", as: "zoneState" } },
       { $unwind: { path: "$zoneState", preserveNullAndEmptyArrays: true } },
+      { $lookup: { from: "natural_language_reports", localField: "zone.code", foreignField: "parsedZoneCode", as: "nlpReports" } },
     ])
-    .toArray() as Array<Incident & { zone: { name: string; code: string; occupancy: boolean }; zoneState?: { criticalSince: Date | null; riskScore: number } }>;
+    .toArray() as Array<Incident & { zone: { name: string; code: string; occupancy: boolean }; zoneState?: { criticalSince: Date | null; riskScore: number }; nlpReports?: Array<{ estimatedSeverity: string; createdAt: Date; validationStatus: string }> }>;
 
   const ranked = raw
     .map((inc) => {
       const criticalSince = inc.zoneState?.criticalSince ?? inc.startedAt ?? inc.openedAt ?? new Date();
       const occupied = inc.zone.occupancy;
-      const riskScore = inc.zoneState?.riskScore ?? inc.riskScore ?? 0;
+      const baseRiskScore = inc.zoneState?.riskScore ?? inc.riskScore ?? 0;
+      
+      // Calculate NLP Bonus
+      const hasRecentHighSeverityNlp = inc.nlpReports?.some(
+        r => r.estimatedSeverity === "HIGH" && r.validationStatus === "ACCEPTED" && (Date.now() - new Date(r.createdAt).getTime() < 24 * 60 * 60 * 1000)
+      );
+      const riskScore = Math.min(100, baseRiskScore + (hasRecentHighSeverityNlp ? 15 : 0));
+      
       const pScore = priorityScore(riskScore, occupied, criticalSince);
       const durationSecs = Math.max(0, (Date.now() - new Date(criticalSince).getTime()) / 1000);
       const durationBonus = Math.min(10, durationSecs / 30);
-      return { inc, pScore, riskScore, occupied, criticalSince, durationBonus };
+      
+      return { inc, pScore, riskScore, occupied, criticalSince, durationBonus, hasNlpBonus: hasRecentHighSeverityNlp };
     })
     .sort((a, b) => {
       if (b.pScore !== a.pScore) return b.pScore - a.pScore;
@@ -109,7 +118,7 @@ export async function priorityQueue() {
       return a.inc.zone.code.localeCompare(b.inc.zone.code);
     });
 
-  return ranked.map(({ inc, pScore, riskScore, occupied, criticalSince, durationBonus }, idx) => ({
+  return ranked.map(({ inc, pScore, riskScore, occupied, criticalSince, durationBonus, hasNlpBonus }, idx) => ({
     rank: idx + 1,
     incident_id: inc.id,
     zone_id: inc.zoneId,
@@ -131,6 +140,7 @@ export async function priorityQueue() {
       primaryHazard: (inc.primaryHazard ?? inc.hazard ?? "NONE") as HazardType,
       criticalSince: new Date(criticalSince),
       durationBonus,
+      hasNlpBonus
     }),
   }));
 }

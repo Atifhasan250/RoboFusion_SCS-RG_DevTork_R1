@@ -7,7 +7,7 @@ export const readingSchema = z.object({
   /** Monotonically increasing sequence number per boot */
   sequence: z.number().int().nonnegative(),
   /** ISO timestamp of sensor observation */
-  timestamp: z.coerce.date(),
+  timestamp: z.coerce.date().refine(date => date.getTime() <= Date.now() + 30000, { message: "Timestamp cannot be more than 30 seconds in the future" }),
   /** Fire/flame sensor: 0 or 1 (digital) */
   fire: z.boolean(),
   /** Gas sensor ADC value (0–4095) */

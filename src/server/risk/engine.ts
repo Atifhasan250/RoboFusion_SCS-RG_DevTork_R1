@@ -97,8 +97,9 @@ export function rankingReason(params: {
   primaryHazard: HazardType;
   criticalSince: Date;
   durationBonus: number;
+  hasNlpBonus?: boolean;
 }): string {
-  const { zoneName, rank, riskScore, occupied, primaryHazard: hazard, criticalSince, durationBonus } = params;
+  const { zoneName, rank, riskScore, occupied, primaryHazard: hazard, criticalSince, durationBonus, hasNlpBonus } = params;
   const durationSecs = Math.round((Date.now() - criticalSince.getTime()) / 1000);
   const durationText = durationSecs >= 60
     ? `${Math.round(durationSecs / 60)} min`
@@ -112,6 +113,7 @@ export function rankingReason(params: {
   if (hazard !== "NONE" && hazard !== "OCCUPANCY") reasons.push(`active ${hazard.toLowerCase()} hazard`);
   if (occupied) reasons.push("confirmed occupancy");
   if (durationBonus > 0) reasons.push(`sustained critical for ${durationText}`);
+  if (hasNlpBonus) reasons.push(`recent HIGH severity NLP report`);
   if (reasons.length) parts.push(`because it has ${reasons.join(", ")}.`);
   return parts.join(" ");
 }

@@ -76,18 +76,23 @@ export async function ingest(zoneCode: string, key: string | null, data: Payload
       return await doIngest(zoneCode, key, data);
     } catch (e: any) {
       if (e.code === 11000) {
-        const c = await collections();
-        const zone = await c.zones.findOne({ code: zoneCode });
-        if (zone) {
-          const existingReading = await c.readings.findOne({ zoneId: zone.id, bootId: data.bootId ?? "default", sequence: data.sequence });
-          const latestCmd = await c.actuator_commands.findOne({ zoneId: zone.id }, { sort: { stateVersion: -1 } });
-          return {
-            accepted: true,
-            duplicate: true,
-            reading_id: existingReading?.id,
-            zone: { safety_state: zone.state, connectivity_state: zone.connectivityState ?? "ONLINE", risk_score: zone.riskScore, state_version: zone.commandVersion },
-            command: latestCmd ? { command_id: latestCmd.id, state_version: latestCmd.stateVersion, led: latestCmd.led, buzzer: latestCmd.buzzer, relay_cutoff: latestCmd.relayCutoff } : null,
-          };
+        if (e.message && (e.message.includes("bootId_1") || e.message.includes("sequence_1"))) {
+          const c = await collections();
+          const zone = await c.zones.findOne({ code: zoneCode });
+          if (zone) {
+            const existingReading = await c.readings.findOne({ zoneId: zone.id, bootId: data.bootId ?? "default", sequence: data.sequence });
+            const latestCmd = await c.actuator_commands.findOne({ zoneId: zone.id }, { sort: { stateVersion: -1 } });
+            return {
+              accepted: true,
+              duplicate: true,
+              reading_id: existingReading?.id,
+              zone: { safety_state: zone.state, connectivity_state: zone.connectivityState ?? "ONLINE", risk_score: zone.riskScore, state_version: zone.commandVersion },
+              command: latestCmd ? { command_id: latestCmd.id, state_version: latestCmd.stateVersion, led: latestCmd.led, buzzer: latestCmd.buzzer, relay_cutoff: latestCmd.relayCutoff } : null,
+            };
+          }
+        } else {
+          // Command version or incident unique index collision
+          throw new IngestionError(409, "CONCURRENT_UPDATE", "Concurrent write collision (E11000)");
         }
       }
       if (e instanceof IngestionError && e.code === "CONCURRENT_UPDATE" && retryCount < 3) {
@@ -382,7 +387,7 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload) {
       }
 
       // 6. Persist actuator command (only if state changed or new command version)
-      const prevCmd = await c.actuator_commands.findOne({ zoneId: zone.id, stateVersion: newStaleVersion - 1 }, { session });
+      const prevCmd = await c.actuator_commands.findOne({ zoneId: zone.id }, { session, sort: { stateVersion: -1 } });
       const newCmdState = connectivityState === "OFFLINE" ? "OFFLINE" : nextSafetyState;
       const cmdLed = newCmdState === "CRITICAL" ? "RED" : newCmdState === "WARNING" ? "YELLOW" : newCmdState === "OFFLINE" ? "BLUE" : "GREEN";
 
@@ -425,41 +430,61 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload) {
 
   // ── WebSocket broadcast ───────────────────────────────────────────────────
   const updatedZone = await c.zones.findOne({ id: zone.id }, { projection: { _id: 0, apiKeyHash: 0 } });
-  const wsEvent = {
-    event_id: id(),
-    event_type: stateChanged ? "ZONE_STATE_CHANGED" : "ZONE_READING_UPDATED",
-    occurred_at: now.toISOString(),
-    data: { zone: updatedZone, riskComponents: risk.components },
-    version: newStaleVersion,
-  };
-  realtime.emit(wsEvent.event_type, wsEvent);
+  
+  if (!isLate) {
+    const wsEvent = {
+      event_id: id(),
+      event_type: stateChanged ? "ZONE_STATE_CHANGED" : "ZONE_READING_UPDATED",
+      occurred_at: now.toISOString(),
+      data: { zone: updatedZone, riskComponents: risk.components },
+      version: newStaleVersion,
+    };
+    realtime.emit(wsEvent.event_type, wsEvent);
 
-  if (openIncident && stateChanged && nextSafetyState === "CRITICAL") {
-    realtime.emit("INCIDENT_CREATED", {
-      event_id: id(), event_type: "INCIDENT_CREATED", occurred_at: now.toISOString(),
-      data: { incident: openIncident, zone: updatedZone }, version: newStaleVersion,
-    });
-    realtime.emit("PRIORITY_QUEUE_UPDATED", {
-      event_id: id(), event_type: "PRIORITY_QUEUE_UPDATED", occurred_at: now.toISOString(),
-      data: {}, version: newStaleVersion,
-    });
-  }
+    if (openIncident && stateChanged && nextSafetyState === "CRITICAL") {
+      realtime.emit("INCIDENT_CREATED", {
+        event_id: id(), event_type: "INCIDENT_CREATED", occurred_at: now.toISOString(),
+        data: { incident: openIncident, zone: updatedZone }, version: newStaleVersion,
+      });
+      realtime.emit("PRIORITY_QUEUE_UPDATED", {
+        event_id: id(), event_type: "PRIORITY_QUEUE_UPDATED", occurred_at: now.toISOString(),
+        data: {}, version: newStaleVersion,
+      });
+    }
 
-  if (stateChanged && (nextSafetyState === "SAFE" || nextSafetyState === "WARNING") && incidentStateEvent) {
-    realtime.emit("INCIDENT_RESOLVED", {
-      event_id: id(), event_type: "INCIDENT_RESOLVED", occurred_at: now.toISOString(),
-      data: { zoneId: zone.id }, version: newStaleVersion,
-    });
-    realtime.emit("PRIORITY_QUEUE_UPDATED", {
-      event_id: id(), event_type: "PRIORITY_QUEUE_UPDATED", occurred_at: now.toISOString(),
-      data: {}, version: newStaleVersion,
-    });
-  }
+    if (stateChanged && (nextSafetyState === "SAFE" || nextSafetyState === "WARNING") && incidentStateEvent) {
+      realtime.emit("INCIDENT_RESOLVED", {
+        event_id: id(), event_type: "INCIDENT_RESOLVED", occurred_at: now.toISOString(),
+        data: { zoneId: zone.id }, version: newStaleVersion,
+      });
+      realtime.emit("PRIORITY_QUEUE_UPDATED", {
+        event_id: id(), event_type: "PRIORITY_QUEUE_UPDATED", occurred_at: now.toISOString(),
+        data: {}, version: newStaleVersion,
+      });
+    }
 
-  if (command) {
-    realtime.emit("ACTUATOR_COMMAND_UPDATED", {
-      event_id: id(), event_type: "ACTUATOR_COMMAND_UPDATED", occurred_at: now.toISOString(),
-      data: { command, zone_code: zoneCode }, version: newStaleVersion,
+    // Live priority queue update for critical zones if score or occupancy changes
+    if (nextSafetyState === "CRITICAL" && (!stateChanged) && (zs.riskScore !== risk.score || zs.occupied !== occupancy)) {
+      realtime.emit("PRIORITY_QUEUE_UPDATED", {
+        event_id: id(), event_type: "PRIORITY_QUEUE_UPDATED", occurred_at: now.toISOString(),
+        data: {}, version: newStaleVersion,
+      });
+    }
+
+    if (command) {
+      realtime.emit("ACTUATOR_COMMAND_UPDATED", {
+        event_id: id(), event_type: "ACTUATOR_COMMAND_UPDATED", occurred_at: now.toISOString(),
+        data: { command, zone_code: zoneCode }, version: newStaleVersion,
+      });
+    }
+  } else {
+    // Late reading: don't alter authoritative state broadcast, just announce a late reading
+    realtime.emit("ZONE_READING_UPDATED", {
+      event_id: id(),
+      event_type: "ZONE_READING_UPDATED",
+      occurred_at: now.toISOString(),
+      data: { zone: updatedZone, riskComponents: zs.riskComponents }, // fallback to prev state
+      version: zs.stateVersion,
     });
   }
 
@@ -470,10 +495,10 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload) {
     duplicate: false,
     reading_id: newReadingId,
     zone: {
-      safety_state: nextSafetyState,
-      connectivity_state: connectivityState,
-      risk_score: risk.score,
-      state_version: newStaleVersion,
+      safety_state: isLate ? zs.safetyState : nextSafetyState,
+      connectivity_state: isLate ? zs.connectivityState : connectivityState,
+      risk_score: isLate ? zs.riskScore : risk.score,
+      state_version: isLate ? zs.stateVersion : newStaleVersion,
     },
     command: command ? {
       command_id: (command as ActuatorCommand).id,

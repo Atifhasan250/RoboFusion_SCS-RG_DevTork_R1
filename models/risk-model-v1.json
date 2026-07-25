@@ -1,7 +1,7 @@
 {
   "version": "v1",
   "algorithm": "logistic-regression-gradient-descent",
-  "trainingData": "Synthetic simulated multi-sensor readings",
+  "trainingData": "Synthetic simulated multi-sensor time-series (Horizon=5)",
   "features": [
     "gas",
     "water",
@@ -9,13 +9,13 @@
     "occupancy",
     "slope"
   ],
-  "intercept": -0.1778816237928122,
+  "intercept": -2.4442895343260655,
   "coefficients": {
-    "gas": 0.8207558104085412,
-    "water": 0.7528959912163893,
-    "fire": 1.1739037930142926,
-    "occupancy": 0.1633448532946849,
-    "slope": 0.9101975211555109
+    "gas": 3.0736637722333557,
+    "water": 3.0006347106478266,
+    "fire": 0.24816004833904873,
+    "occupancy": -0.1688992111844981,
+    "slope": 0.04556440631135348
   },
-  "trainedAt": "2026-07-25T09:50:51.949Z"
+  "trainedAt": "2026-07-25T17:43:15.328Z"
 }

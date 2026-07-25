@@ -142,6 +142,53 @@ const migrations = [
       // (already created in 002, this ensures it exists)
     },
   },
+
+  // ── 004: zone_states schema validation ───────────────────────────────────────
+  {
+    id: "004-zone-states-validator",
+    run: async () => {
+      const d = await db();
+      await d.command({
+        collMod: "zone_states",
+        validator: {
+          $jsonSchema: {
+            bsonType: "object",
+            required: [
+              "zoneId",
+              "safetyState",
+              "connectivityState",
+              "riskScore",
+              "riskComponents",
+              "fireConfirmed",
+              "firePositiveCount",
+              "fireClearCount",
+              "stateVersion",
+              "lastObservedAt",
+              "updatedAt"
+            ],
+            properties: {
+              zoneId: { bsonType: "string" },
+              safetyState: { enum: ["SAFE", "WARNING", "CRITICAL"] },
+              connectivityState: { enum: ["ONLINE", "OFFLINE"] },
+              riskScore: { bsonType: ["int", "double", "long"] },
+              riskComponents: {
+                bsonType: "object",
+                required: ["fire", "gas", "water", "occupancy"]
+              },
+              fireConfirmed: { bsonType: "bool" },
+              firePositiveCount: { bsonType: ["int", "double", "long"] },
+              fireClearCount: { bsonType: ["int", "double", "long"] },
+              stateVersion: { bsonType: ["int", "double", "long"] },
+              lastObservedAt: { bsonType: "date" },
+              updatedAt: { bsonType: "date" }
+            }
+          }
+        },
+        validationLevel: "strict",
+        validationAction: "error",
+      });
+    }
+  }
 ];
 
 async function main() {

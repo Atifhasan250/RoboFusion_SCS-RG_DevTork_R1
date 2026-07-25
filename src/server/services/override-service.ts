@@ -34,13 +34,16 @@ export async function applyOverride(input: OverrideInput, userId: string) {
         { session }
       );
 
-      // Bump commandVersion
+      // Bump commandVersion optimistically
       const newCommandVersion = zone.commandVersion + 1;
-      await c.zones.updateOne(
-        { id: zone.id },
+      const updateRes = await c.zones.updateOne(
+        { id: zone.id, commandVersion: zone.commandVersion },
         { $set: { commandVersion: newCommandVersion, updatedAt: now } },
         { session }
       );
+      if (updateRes.matchedCount === 0) {
+        throw Object.assign(new Error("Concurrent modification detected, please retry"), { httpStatus: 409, code: "CONCURRENT_UPDATE" });
+      }
 
       // Fetch latest command to base the new state on
       const latestCmd = await c.actuator_commands.findOne({ zoneId: zone.id }, { session, sort: { stateVersion: -1 } });
@@ -56,6 +59,9 @@ export async function applyOverride(input: OverrideInput, userId: string) {
         buzzer = true;
         relayCutoff = true;
       } else if (input.action === "RESET") {
+        if (latestCmd?.safetyState === "CRITICAL") {
+           throw Object.assign(new Error("Cannot RESET while zone is actively CRITICAL (use SILENCE instead)"), { httpStatus: 400, code: "INVALID_ACTION" });
+        }
         led = "GREEN";
         buzzer = false;
         relayCutoff = false;
@@ -150,7 +156,13 @@ export async function clearOverride(zoneCode: string, userId: string) {
   const buzzer = newCmdState === "CRITICAL";
   const relayCutoff = newCmdState === "CRITICAL";
 
-  await c.zones.updateOne({ id: zone.id }, { $set: { commandVersion: newCommandVersion, updatedAt: now } });
+  const updateRes = await c.zones.updateOne(
+    { id: zone.id, commandVersion: zone.commandVersion },
+    { $set: { commandVersion: newCommandVersion, updatedAt: now } }
+  );
+  if (updateRes.matchedCount === 0) {
+    throw Object.assign(new Error("Concurrent modification detected, please retry"), { httpStatus: 409, code: "CONCURRENT_UPDATE" });
+  }
 
   await c.actuator_commands.insertOne({
     id: id(),
