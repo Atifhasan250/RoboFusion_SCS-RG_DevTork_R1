@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Internal and Hackathon files
+AGENTS.md
+CLAUDE.md
+RoboFusion_1.0_SCS-RG_Round1_Case.pdf
+hackathon_nextjs_mongodb_gemini_final.txt
+bun.lock
