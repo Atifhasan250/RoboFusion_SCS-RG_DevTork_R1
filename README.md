@@ -1,102 +1,93 @@
-# RoboFusion 1.0 — SCS-RG Hackathon Submission
+# Multi-Hazard Smart Campus Safety & Response Grid (SCS-RG)
+
 **Team:** DevTork  
-**Track:** Full-stack Backend + Wokwi Simulation
+**Track:** Track B (Simulation)
 
-## 🎥 Video Demonstration
-> **[Watch our 7-minute System Walkthrough on Google Drive]**(Link_Here)
+## Video Demonstration
+> **[System Walkthrough on Google Drive]**(Insert_Link_Here)
 
-## 📖 What this system does
-The **Multi-Hazard Smart Campus Safety & Response Grid (SCS-RG)** is a production-grade IoT backend. It continuously monitors 5 campus zones for fire, gas, flood, and unauthorized occupancy. 
+## System Overview
+The SCS-RG is a full-stack IoT system designed to monitor technical labs for fire, gas, flood, and unauthorized occupancy. It implements a custom Risk Fusion formula to compute per-zone risk scores, prioritizes incidents during simultaneous multi-zone emergencies, and provides a real-time command dashboard for campus security.
 
-Our custom **Risk Fusion Engine** calculates real-time risk scores, enforces strict state hysteresis to prevent false alarms, manages a priority queue for critical incidents, and handles race-condition-safe acknowledgments using **MongoDB Multi-document Transactions**.
+This repository contains the complete implementation for the Backend System, Frontend Command Dashboard, and Database Schema as per the Round 1 Case requirements.
 
 ---
 
-## 🚀 Setup Instructions (For Judges)
-
-We have made the setup process extremely simple.
+## Setup Instructions
 
 ### Prerequisites
-- Node.js (v20+)
-- Docker Desktop (for the MongoDB Replica Set)
+- Node.js (v20 or higher)
+- Docker Desktop (for MongoDB Replica Set)
 
-### Step-by-Step
-1. **Environment Setup:**
+### Local Deployment
+1. **Configure Environment:**
    ```bash
    cp .env.example .env.local
    ```
-   *(No need to change anything for the local test. AI features will gracefully degrade without API keys, but the core system will function perfectly).*
+   *(Add required API keys if evaluating NLP and ML prediction bonus features).*
 
-2. **Start the Database:**
-   We use a MongoDB Replica Set to support ACID transactions.
+2. **Initialize Database:**
+   The system requires a MongoDB Replica Set to support Multi-Document Transactions.
    ```bash
    docker compose up -d
    ```
 
-3. **Install Dependencies & Prepare Database:**
+3. **Install Dependencies & Migrate Schema:**
    ```bash
    npm install
-   npm run db:migrate    # Creates all 15 collections, TTL indexes, and JSON validators
-   npm run db:seed       # Seeds the 5 labs and 2 demo users
+   npm run db:migrate    # Creates collections, TTL indexes, and JSON validators
+   npm run db:seed       # Seeds 5 candidate zones and demo users
    ```
 
-4. **Start the Server:**
+4. **Start Application:**
    ```bash
    npm run dev
    ```
-   The backend, API, and WebSocket server will now run on `http://localhost:3000`.
+   The server operates on `http://localhost:3000`.
 
 ---
 
-## 🧪 Testing the System (Proof of Scale & Integrity)
+## Testing & Verification
 
-We built this system to handle real-world scale and concurrency. You can verify this by running our automated test suites:
+The following commands verify the database integrity, concurrency handling, and system logic outlined in the evaluation criteria.
 
-### 1. Database Integrity & Concurrency
+### Database Integrity & Concurrency
 ```bash
-# Prove that there are 0 orphan documents (Referential Integrity)
+# Verifies zero orphan documents across all collections
 npm run db:integrity:check
 
-# Run 10 simultaneous writes to prove transaction safety (Race Conditions)
+# Simulates 10 simultaneous writes to evaluate transaction safety
 npm run test:concurrency
 
-# Seed 10,000+ historical readings to prove scale
+# Seeds 10,000+ historical readings to evaluate query performance
 npm run db:seed:readings
 
-# Generate explain("executionStats") for index performance
+# Generates explain("executionStats") for index performance verification
 npm run db:indexes:explain
 ```
 
-### 2. Risk Engine & Unit Tests
+### System Logic
 ```bash
-# Run the 23 unit tests verifying our risk formula and hysteresis logic
+# Executes unit tests for the risk formula, hysteresis, and priority queue
 npm run test:unit
 ```
 
 ---
 
-## 📚 Documentation (Required PDFs)
+## Documentation
 
-Our system is thoroughly documented to map exactly to the PDF requirements.
+The system's technical documentation is structured as follows:
 
-- **[System Architecture & Risk Formula](docs/ARCHITECTURE.md)**: Explains the data flow, risk weights, state hysteresis, and backend resilience.
-- **[Database Schema Design](docs/DATABASE.md)**: Details the 15 collections, multi-document transactions, and TTL data retention policies.
+- **[System Architecture & Risk Formula](docs/ARCHITECTURE.md)**: Details the fusion formula, state hysteresis, backend resilience, and justification for weight assignments.
+- **[Database Schema Design](docs/DATABASE.md)**: Documents the schema normalization, foreign key alternatives, and data retention policies.
 - **[OpenAPI Specification](openapi.yaml)**: Complete REST and WebSocket API documentation.
+- **[Wokwi Hardware Simulation](wokwi-simulation/README.md)**: Wiring diagrams and configuration instructions for the Track B hardware simulation.
 
 ---
 
-## ✨ Bonus Features Achieved (40/40 Marks)
+## Bonus Features Implemented
 
-We successfully implemented all 4 optional bonus features:
-
-| Bonus | Feature | Implementation Details |
-|---|---|---|
-| **Bonus 1** | Camera-Based Occupancy | The backend accepts `cameraOccupancy` in the payload and fuses it with PIR data to reduce false alarms. |
-| **Bonus 2** | Short-Term Risk Trend | `GET /api/v1/trends/:zone` performs a linear regression on the last 8 readings to detect `RISING`/`FALLING` trends. |
-| **Bonus 3** | ML Risk Prediction | `GET /api/v1/predictions/:zone` runs a pre-trained Logistic Regression model to predict critical escalation probability. |
-| **Bonus 4** | Natural-Language Input | `POST /api/v1/reports/note` uses an LLM (Gemini/OpenRouter) to securely parse free-text into a deterministic hazard signal. |
-
-*Note: As per PDF safety rules, ML and NLP features are advisory only and are strictly sandboxed from triggering physical actuators.*
-
----
-*Built with ❤️ by Team DevTork.*
+1. **Camera-Based Occupancy Check**: Hardware node supports `cameraOccupancy` signal, fused with PIR sensor data on the backend.
+2. **Short-Term Risk Trend**: `GET /api/v1/trends/:zone` utilizes linear regression to determine risk trajectory.
+3. **Machine-Learning Risk Prediction**: `GET /api/v1/predictions/:zone` implements a Logistic Regression model to estimate the probability of a critical escalation.
+4. **Natural-Language Incident Reporting**: `POST /api/v1/reports/note` converts free-text observations into deterministic hazard signals via LLM parsing, safeguarded by strict validation gates.

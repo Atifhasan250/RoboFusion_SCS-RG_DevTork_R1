@@ -1,31 +1,31 @@
-# Wokwi Hardware Simulation (100% Accuracy)
+# Wokwi Hardware Simulation (Track B)
 
-This folder contains the complete simulation for a Zone Node (ESP32) that perfectly matches the PDF's Hardware and Sensing requirements (Section A).
+This directory contains the ESP32 simulation files for a Zone Node, implementing the requirements for Section A: Hardware & Sensing.
 
-## How to use this online
+## Running the Simulation
 
-Since you have deployed your backend to Render, your backend is publicly available. We will connect the Wokwi ESP32 directly to your live Render server!
+The simulation is configured to connect to the backend deployed on Render.
 
-### Step 1: Create the Wokwi Project
+### Step 1: Wokwi Setup
 1. Go to [wokwi.com](https://wokwi.com) and create a **New ESP32 Project**.
-2. Open the **`sketch.ino`** file from this folder, copy all the code, and paste it into the `sketch.ino` tab on Wokwi.
-3. Open the **`diagram.json`** file from this folder, copy all the code, and paste it into the `diagram.json` tab on Wokwi.
-4. Click on the `Library Manager` tab in Wokwi (the plus icon next to files) or create a `libraries.txt` file and add: `ArduinoJson`.
+2. Copy the contents of **`sketch.ino`** from this directory into the Wokwi sketch editor.
+3. Copy the contents of **`diagram.json`** from this directory into the Wokwi diagram editor to generate the circuit.
+4. Open the `Library Manager` in Wokwi (or create `libraries.txt`) and add: `ArduinoJson`.
 
-### Step 2: Ensure the Render Link is Correct
-In your Wokwi `sketch.ino`, check that this line at the top has your exact Render URL:
+### Step 2: Configuration
+In `sketch.ino`, the backend endpoint is predefined:
 ```cpp
 const char* BACKEND_URL = "https://robofusion-scs-rg-devtork-r1.onrender.com"; 
 ```
-*(Make sure there is **no trailing slash (`/`)** at the end of the URL).*
 
-### Step 3: Run it!
-Click the Green Play button in Wokwi. 
-- You will see the ESP32 connect to WiFi.
-- It will start sending sensor data every 500ms to your Render server.
-- To simulate the 5 zones, you can duplicate this Wokwi project in a new tab, and simply change the `ZONE_CODE` variable at the top of the code (e.g., `"SERVER_ROOM"`, `"ROBOTICS_LAB"`).
+### Step 3: Execution
+Click the Play button in Wokwi. 
+- The ESP32 will connect to the `Wokwi-GUEST` WiFi.
+- Sensor data is sampled and transmitted via POST request every 500ms.
+- Actuator commands are polled via GET request every 1000ms.
+- To simulate multiple zones concurrently, duplicate the Wokwi project across multiple browser tabs and modify the `ZONE_CODE` variable in each (e.g., `"SERVER_ROOM"`, `"ROBOTICS_LAB"`).
 
-## Testing the Sensors (PDF Requirements)
-- **Fire/Flame:** Flip the "Flame Sensor" switch. The backend requires 2 consecutive readings (1 second) to trigger (Debounce).
-- **Gas:** Slide the Gas potentiometer past the middle. Note: The backend ignores gas for the first 30 seconds of uptime (Warm-up).
-- **Camera (Bonus 1):** Flip the Camera Occ switch. This tells the backend the camera sees someone, cross-checking the PIR sensor.
+## Sensor Operations
+- **Fire/Flame:** Toggled via the Flame Sensor slide switch. Triggers debouncing logic on the backend.
+- **Gas:** Adjusted via the Gas potentiometer. The backend enforces a 30-second warm-up period.
+- **Camera Occupancy:** Toggled via the Camera Occ switch to provide cross-checking logic against the PIR sensor.
