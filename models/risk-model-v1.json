@@ -1,0 +1,21 @@
+{
+  "version": "v1",
+  "algorithm": "logistic-regression-gradient-descent",
+  "trainingData": "Synthetic simulated multi-sensor readings",
+  "features": [
+    "gas",
+    "water",
+    "fire",
+    "occupancy",
+    "slope"
+  ],
+  "intercept": -0.1778816237928122,
+  "coefficients": {
+    "gas": 0.8207558104085412,
+    "water": 0.7528959912163893,
+    "fire": 1.1739037930142926,
+    "occupancy": 0.1633448532946849,
+    "slope": 0.9101975211555109
+  },
+  "trainedAt": "2026-07-25T09:50:51.949Z"
+}

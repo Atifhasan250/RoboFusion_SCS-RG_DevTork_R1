@@ -1,0 +1,22 @@
+{
+  "accuracy": 0.7983333333333333,
+  "precision": 0.8016806722689076,
+  "recall": 0.99375,
+  "f1": 0.8874418604651162,
+  "confusionMatrix": [
+    [
+      2,
+      118
+    ],
+    [
+      3,
+      477
+    ]
+  ],
+  "dataset": {
+    "total": 3000,
+    "train": 2400,
+    "test": 600
+  },
+  "note": "Synthetic-data validation only; prediction is advisory and never actuates hardware."
+}
