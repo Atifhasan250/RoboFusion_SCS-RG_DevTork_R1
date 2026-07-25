@@ -181,7 +181,12 @@ void sendReadings() {
   doc["pir"] = pirState;
   doc["cameraOccupancy"] = cameraOcc;
   bool fault = (digitalRead(PIN_FAULT) == LOW);
-  doc["sensorHealth"] = fault ? "OFFLINE" : "HEALTHY";
+  doc["sensorHealth"] = fault ? "DEGRADED" : "HEALTHY";
+  JsonObject sensorStatus = doc.createNestedObject("sensorStatus");
+  sensorStatus["fire"] = fault ? "OFFLINE" : "ONLINE";
+  sensorStatus["gas"] = fault ? "OFFLINE" : "ONLINE";
+  sensorStatus["water"] = fault ? "OFFLINE" : "ONLINE";
+  sensorStatus["pir"] = fault ? "OFFLINE" : "ONLINE";
   doc["deviceUptimeSeconds"] = millis() / 1000;
   doc["sampleIntervalMs"] = READING_INTERVAL;
 

@@ -32,6 +32,7 @@ const migrations = [
       await Promise.all([
         // zones
         d.collection("zones").createIndex({ code: 1 }, { unique: true }),
+        d.collection("zones").createIndex({ commandVersion: 1 }),
         // zone_states — one state doc per zone
         d.collection("zone_states").createIndex({ zoneId: 1 }, { unique: true }),
         d.collection("zone_states").createIndex({ connectivityState: 1 }),
@@ -187,6 +188,15 @@ const migrations = [
         validationLevel: "strict",
         validationAction: "error",
       });
+    }
+  },
+
+  // ── 005: Add commandVersion index to zones ─────────────────────────────────
+  {
+    id: "005-command-version-index",
+    run: async () => {
+      const d = await db();
+      await d.collection("zones").createIndex({ commandVersion: 1 });
     }
   }
 ];

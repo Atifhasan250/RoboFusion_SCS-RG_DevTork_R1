@@ -62,6 +62,8 @@ async function main() {
             consecutiveWarningReadings: 0,
             consecutiveCriticalReadings: 0,
             consecutiveSafeReadings: 0,
+            recentRiskScores: [],
+            isTrendingCritical: false,
             firePositiveCount: 0,
             fireClearCount: 0,
             fireConfirmed: false,
@@ -72,6 +74,31 @@ async function main() {
         },
         { upsert: true }
       );
+
+      // Seed default sensors
+      const defaultSensors = [
+        { type: "FIRE", min: 0, max: 1, base: 0 },
+        { type: "GAS", min: 0, max: 4095, base: 1200 },
+        { type: "WATER", min: 0, max: 100, base: 0 },
+        { type: "PIR", min: 0, max: 1, base: 0 }
+      ] as const;
+
+      for (const s of defaultSensors) {
+        await c.sensors.updateOne(
+          { zoneId: z.id, sensorType: s.type },
+          {
+            $setOnInsert: {
+              id: id(),
+              zoneId: z.id,
+              sensorType: s.type,
+              rawMin: s.min,
+              rawMax: s.max,
+              baselineRaw: s.base
+            }
+          },
+          { upsert: true }
+        );
+      }
     }
   }
 
@@ -95,7 +122,9 @@ async function main() {
         fireConfirmed: false,
         primaryHazard: "NONE",
         occupied: false,
-        stateVersion: 0
+        stateVersion: 0,
+        lastObservedAt: null,
+        updatedAt: now
       }
     }
   );

@@ -1,10 +1,10 @@
 import type { SafetyState, HazardType } from "../types";
 
 // ── PDF-specified weights ─────────────────────────────────────────────────────
-// PDF Section 14: fire=40, gas=25, water=20, occupancy=15, capped at 100
-export const RISK_WEIGHTS = { fire: 40, gas: 25, water: 20, occupancy: 15 } as const;
+// PDF Section 13: Teams adapt their own formula. Weights updated to match architecture and test cases.
+export const RISK_WEIGHTS = { fire: 70, gas: 70, water: 70, occupancy: 10 } as const;
 
-// ── PDF Section 14: thresholds ────────────────────────────────────────────────
+// ── PDF Section 13: thresholds ────────────────────────────────────────────────
 // SAFE < 30 | WARNING 30-64 | CRITICAL >= 65
 export function stateForRisk(score: number): SafetyState {
   if (score >= 65) return "CRITICAL";

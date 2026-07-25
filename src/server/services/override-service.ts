@@ -146,7 +146,7 @@ export async function clearOverride(zoneCode: string, userId: string) {
   const client = await mongoClient();
   const session = client.startSession();
   
-  let newCommandVersion = zone.commandVersion + 1;
+  const newCommandVersion = zone.commandVersion + 1;
   try {
     let result;
     await session.withTransaction(async () => {

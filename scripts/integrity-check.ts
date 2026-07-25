@@ -16,6 +16,17 @@ async function main() {
     detail: "readings.zoneId → zones.id",
   };
 
+  // 1.5 Sensors with no matching zone
+  const orphanSensors = await c.sensors.aggregate([
+    { $lookup: { from: "zones", localField: "zoneId", foreignField: "id", as: "zone" } },
+    { $match: { zone: { $eq: [] } } },
+    { $count: "count" },
+  ]).toArray();
+  results["orphan_sensors"] = {
+    orphans: orphanSensors[0]?.count ?? 0,
+    detail: "sensors.zoneId → zones.id",
+  };
+
   // 2. Incidents with no matching zone
   const orphanIncidents = await c.incidents.aggregate([
     { $lookup: { from: "zones", localField: "zoneId", foreignField: "id", as: "zone" } },

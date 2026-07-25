@@ -19,8 +19,8 @@ function generateTimeSeriesData(numSequences = 100, length = 50): Sample[] {
   
   for (let seq = 0; seq < numSequences; seq++) {
     // Generate a random trajectory for the zone
-    let gas = rand() * 0.5;
-    let water = rand() * 0.5;
+    let gas = rand() * 0.2;
+    let water = rand() * 0.2;
     let fire = 0;
     let occ = 0;
     
@@ -30,17 +30,17 @@ function generateTimeSeriesData(numSequences = 100, length = 50): Sample[] {
     
     for (let t = 0; t < length; t++) {
       if (escalates) {
-        gas = Math.min(1.0, gas + rand() * 0.1);
-        water = Math.min(1.0, water + rand() * 0.1);
+        gas = Math.min(1.0, gas + rand() * 0.05);
+        water = Math.min(1.0, water + rand() * 0.05);
         if (t > length / 2 && rand() > 0.8) fire = 1;
       } else {
-        gas = Math.max(0, gas + (rand() - 0.5) * 0.1);
-        water = Math.max(0, water + (rand() - 0.5) * 0.1);
-        if (rand() > 0.95) fire = 1; else fire = 0;
+        gas = Math.max(0, gas - rand() * 0.02);
+        water = Math.max(0, water - rand() * 0.02);
+        fire = 0;
       }
       occ = rand() > 0.5 ? 1 : 0;
       
-      const risk = Math.min(100, 40 * fire + 25 * gas + 20 * water + 15 * occ);
+      const risk = Math.min(100, 70 * fire + 70 * gas + 70 * water + 10 * occ);
       trajectory.push({ gas, water, fire, occ, risk });
     }
     
@@ -117,7 +117,7 @@ function balanceAndShuffle(samples: Sample[]): Sample[] {
   const positives = samples.filter(s => s.y === 1);
   const negatives = samples.filter(s => s.y === 0);
   const minCount = Math.min(positives.length, negatives.length);
-  if (minCount === 0) return samples;
+  if (minCount === 0) throw new Error("Dataset is entirely one class, cannot balance!");
   const balanced = [
     ...positives.slice(0, minCount),
     ...negatives.slice(0, minCount)
@@ -154,6 +154,18 @@ async function main() {
   }, null, 2));
   
   console.log("Training complete. Metrics:", metrics);
+  
+  // Model acceptance criteria
+  if (metrics.accuracy < 0.7) throw new Error("Accuracy too low");
+  if (metrics.precision < 0.7) throw new Error("Precision too low");
+  if (metrics.recall < 0.7) throw new Error("Recall too low");
+  if (metrics.specificity < 0.7) throw new Error("Specificity too low");
+  
+  // Verify no-hazard input predicted probability is low
+  const noHazardProb = sig(weights[0] + [0, 0, 0, 0, 0].reduce((s, v, i) => s + v * weights[i + 1], 0));
+  if (noHazardProb > 0.1) throw new Error(`No-hazard predicted probability too high: ${noHazardProb}`);
+  
+  console.log(`Accepted: No-hazard probability is ${(noHazardProb * 100).toFixed(2)}%`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

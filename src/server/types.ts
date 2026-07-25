@@ -79,6 +79,9 @@ export interface ZoneStateDoc {
   consecutiveWarningReadings: number;
   consecutiveCriticalReadings: number;
   consecutiveSafeReadings: number;
+  // Short-Term Risk Trend (Bonus 2)
+  recentRiskScores: number[];
+  isTrendingCritical: boolean;
   // Fire debounce
   firePositiveCount: number;
   fireClearCount: number;

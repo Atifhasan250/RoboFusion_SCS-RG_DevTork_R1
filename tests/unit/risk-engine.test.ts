@@ -9,8 +9,8 @@ import {
   RISK_WEIGHTS,
 } from "../../src/server/risk/engine";
 
-// ── PDF Section 14: Risk Formula ───────────────────────────────────────────────
-describe("Risk Formula (PDF Section 14)", () => {
+// ── PDF Section 13: Risk Formula ───────────────────────────────────────────────
+describe("Risk Formula (PDF Section 13)", () => {
   it("uses PDF weights: fire=70, gas=70, water=70, occupancy=10", () => {
     expect(RISK_WEIGHTS.fire).toBe(70);
     expect(RISK_WEIGHTS.gas).toBe(70);
@@ -35,6 +35,12 @@ describe("Risk Formula (PDF Section 14)", () => {
     expect(result.state).toBe("CRITICAL");
   });
 
+  it("full water alone → CRITICAL (score 70)", () => {
+    const result = calculateRisk({ fireConfirmed: false, gasFactor: 0, waterFactor: 1, occupancy: false });
+    expect(result.score).toBe(70);
+    expect(result.state).toBe("CRITICAL");
+  });
+
   it("occupancy alone cannot reach WARNING or CRITICAL", () => {
     const result = calculateRisk({ fireConfirmed: false, gasFactor: 0, waterFactor: 0, occupancy: true });
     expect(result.score).toBe(10);
@@ -55,8 +61,8 @@ describe("Risk Formula (PDF Section 14)", () => {
   });
 });
 
-// ── PDF Section 14: State Thresholds ─────────────────────────────────────────
-describe("State Thresholds (PDF Section 14)", () => {
+// ── PDF Section 13: State Thresholds ─────────────────────────────────────────
+describe("State Thresholds (PDF Section 13)", () => {
   it("score < 30 → SAFE", () => expect(stateForRisk(29.99)).toBe("SAFE"));
   it("score = 30 → WARNING", () => expect(stateForRisk(30)).toBe("WARNING"));
   it("score = 64.99 → WARNING", () => expect(stateForRisk(64.99)).toBe("WARNING"));

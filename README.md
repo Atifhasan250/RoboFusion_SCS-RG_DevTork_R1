@@ -87,7 +87,7 @@ The system's technical documentation is structured as follows:
 
 ## Bonus Features Implemented
 
-1. **Camera-Based Occupancy Check**: Hardware node supports `cameraOccupancy` signal, fused with PIR sensor data on the backend.
-2. **Short-Term Risk Trend**: `GET /api/v1/trends/:zone` utilizes linear regression to determine risk trajectory.
+1. **Camera-Based Occupancy Check**: Wokwi simulation includes a toggle switch simulating ESP32-CAM input, which the backend cross-checks with PIR to eliminate false negatives.
+2. **Short-Term Risk Trend**: The ingestion engine calculates linear trajectory (slope) across recent readings and triggers a `TREND_CRITICAL` warning if escalation is imminent.
 3. **Machine-Learning Risk Prediction**: `GET /api/v1/predictions/:zone` implements a Logistic Regression model to estimate the probability of a critical escalation.
 4. **Natural-Language Incident Reporting**: `POST /api/v1/reports/note` converts free-text observations into deterministic hazard signals via LLM parsing, safeguarded by strict validation gates.

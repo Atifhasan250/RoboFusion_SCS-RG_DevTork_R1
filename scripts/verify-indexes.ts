@@ -8,7 +8,7 @@ const REQUIRED_INDEXES: Record<string, string[][]> = {
   incidents: [["severity", "startedAt"], ["zoneId", "startedAt"]],
   incident_events: [["incidentId", "occurredAt"]],
   acknowledgments: [["incidentId"]],
-  actuator_commands: [["zoneId", "stateVersion"]],
+  actuator_commands: [["zoneId", "commandVersion"]],
   users: [["email"]],
   sessions: [["expiresAt"]],
 };

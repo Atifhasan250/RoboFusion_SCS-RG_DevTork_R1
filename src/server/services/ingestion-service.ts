@@ -2,7 +2,7 @@ import { collections } from "../db/collections";
 import { mongoClient } from "../db/client";
 import { env } from "../config/env";
 import { hashSecret, id, safeEqual } from "../utils/id";
-import { calculateRisk, normalize, applyHysteresis, stateForRisk } from "../risk/engine";
+import { calculateRisk, normalize, applyHysteresis, stateForRisk, RISK_WEIGHTS } from "../risk/engine";
 import { realtime } from "../realtime/hub";
 import { log } from "../utils/logger";
 import type { Incident, ZoneStateDoc, ActuatorCommand, IncidentEvent, SafetyState, HazardType, ConnectivityState } from "../types";
@@ -23,9 +23,23 @@ const GAS_CRITICAL = 3000;
 const WATER_DRY = 0;
 const WATER_CRITICAL = 80;
 
-function computeFactors(data: Payload, fireConfirmed: boolean, warmingUp: boolean) {
-  const gasFactor = warmingUp ? 0 : normalize(data.gas - GAS_BASELINE, GAS_CRITICAL - GAS_BASELINE);
-  const waterFactor = normalize(data.water - WATER_DRY, WATER_CRITICAL - WATER_DRY);
+function computeFactors(data: Payload, zs: ZoneStateDoc | null, fireConfirmed: boolean, warmingUp: boolean) {
+  let gasFactor = 0;
+  if (warmingUp) {
+    gasFactor = 0;
+  } else if (data.sensorStatus?.gas === "OFFLINE" && zs) {
+    gasFactor = zs.riskComponents.gas / RISK_WEIGHTS.gas;
+  } else {
+    gasFactor = normalize(data.gas - GAS_BASELINE, GAS_CRITICAL - GAS_BASELINE);
+  }
+
+  let waterFactor = 0;
+  if (data.sensorStatus?.water === "OFFLINE" && zs) {
+    waterFactor = zs.riskComponents.water / RISK_WEIGHTS.water;
+  } else {
+    waterFactor = normalize(data.water - WATER_DRY, WATER_CRITICAL - WATER_DRY);
+  }
+
   const occupancy = data.pir || data.cameraOccupancy === true;
   return { gasFactor, waterFactor, occupancy, fireConfirmed };
 }
@@ -92,6 +106,7 @@ export async function ingest(zoneCode: string, key: string | null, data: Payload
           }
         } else {
           // Command version or incident unique index collision
+          console.error("E11000 collision details:", e);
           throw new IngestionError(409, "CONCURRENT_UPDATE", "Concurrent write collision (E11000)");
         }
       }
@@ -151,6 +166,8 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload) {
       consecutiveWarningReadings: 0,
       consecutiveCriticalReadings: 0,
       consecutiveSafeReadings: 0,
+      recentRiskScores: [],
+      isTrendingCritical: false,
       firePositiveCount: 0,
       fireClearCount: 0,
       fireConfirmed: false,
@@ -176,7 +193,7 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload) {
 
   // ── Fire debounce ─────────────────────────────────────────────────────────
   let { firePositiveCount, fireClearCount, fireConfirmed, fireConfirmedAt } = zs;
-  const FIRE_DEBOUNCE = 2; // 2 consecutive positive readings (~1s at 500ms interval)
+  const FIRE_DEBOUNCE = 5; // 5 consecutive positive readings (per PDF checklist)
   const FIRE_CLEAR = 3;
 
   if (data.fire) {
@@ -197,7 +214,7 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload) {
   const fireJustConfirmed = fireConfirmed && !zs.fireConfirmed;
 
   // ── Risk calculation ──────────────────────────────────────────────────────
-  const { gasFactor, waterFactor, occupancy } = computeFactors(data, fireConfirmed, warmingUp);
+  const { gasFactor, waterFactor, occupancy } = computeFactors(data, zs, fireConfirmed, warmingUp);
   const risk = calculateRisk({ fireConfirmed, gasFactor, waterFactor, occupancy });
 
   // ── Connectivity state ────────────────────────────────────────────────────
@@ -224,7 +241,16 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload) {
   else if (risk.score >= 30) { consecutiveWarningReadings++; consecutiveCriticalReadings = 0; consecutiveSafeReadings = 0; }
   else { consecutiveSafeReadings++; consecutiveWarningReadings = 0; consecutiveCriticalReadings = 0; }
 
-  const nextSafetyState = connectivityState === "OFFLINE" ? prevState : applyHysteresis({
+  // Short-term trend tracking (Bonus 2)
+  const recentRiskScores = [...(zs.recentRiskScores || []), risk.score].slice(-5);
+  let isTrendingCritical = false;
+  if (recentRiskScores.length === 5) {
+    const slope = recentRiskScores[4] - recentRiskScores[0];
+    isTrendingCritical = (slope >= 15) && risk.score >= 40 && risk.score < 65;
+  }
+
+  // OFFLINE fail-safe (#10): if offline and previously CRITICAL, don't drop to SAFE
+  let nextSafetyState = connectivityState === "OFFLINE" ? prevState : applyHysteresis({
     currentState: prevState,
     newRiskScore: risk.score,
     consecutiveAboveThreshold: risk.score >= 65 ? consecutiveCriticalReadings : consecutiveWarningReadings,
@@ -232,6 +258,11 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload) {
     recoveryStableMs,
     fireJustConfirmed,
   });
+
+  // #18 Rapid CRITICAL→SAFE prevention
+  if (prevState === "CRITICAL" && nextSafetyState === "SAFE" && recoveryStableMs < 5000) {
+    nextSafetyState = "WARNING"; // downgrade instead of immediate clear if unstable
+  }
 
   const stateChanged = nextSafetyState !== prevState;
   const newStaleVersion = zs.stateVersion + 1;
@@ -258,13 +289,14 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload) {
         receivedAt: now,
         observedAt: data.timestamp,
         uptimeMs,
-        sampleIntervalMs: 500,
+        sampleIntervalMs: data.sampleIntervalMs, // (#12 payload value)
         fire: data.fire,
         gas: data.gas,
         water: data.water,
         pir: data.pir,
         cameraOccupancy: data.cameraOccupancy ?? null,
         sensorHealth: data.sensorHealth,
+        sensorStatus: data.sensorStatus ?? {}, // (#13 per-sensor status)
         fireFactor,
         gasFactor,
         waterFactor,
@@ -302,6 +334,8 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload) {
           warningSince: nextSafetyState === "WARNING" && prevState !== "WARNING" ? now : (nextSafetyState === "WARNING" ? zs.warningSince : null),
           criticalSince: nextSafetyState === "CRITICAL" && prevState !== "CRITICAL" ? now : (nextSafetyState === "CRITICAL" ? zs.criticalSince : null),
           recoverySince,
+          recentRiskScores,
+          isTrendingCritical,
         };
         const updateResult = await c.zone_states.updateOne(
           { zoneId: zone.id, stateVersion: zs.stateVersion },
@@ -443,6 +477,13 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload) {
       version: newStaleVersion,
     };
     realtime.emit(wsEvent.event_type, wsEvent);
+
+    if (isTrendingCritical && !zs.isTrendingCritical) {
+      realtime.emit("TREND_CRITICAL", {
+        event_id: id(), event_type: "TREND_CRITICAL", occurred_at: now.toISOString(),
+        data: { zone: updatedZone }, version: newStaleVersion,
+      });
+    }
 
     if (openIncident && stateChanged && nextSafetyState === "CRITICAL") {
       realtime.emit("INCIDENT_CREATED", {

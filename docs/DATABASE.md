@@ -11,7 +11,7 @@
 | `incidents` | Incident lifecycle | `(zoneId, active:true)` partial unique |
 | `incident_events` | Event timeline per incident | `(incidentId, occurredAt)` |
 | `acknowledgments` | One per incident, race-safe | `incidentId` unique |
-| `actuator_commands` | Persisted commands per state version | `(zoneId, stateVersion)` unique |
+| `actuator_commands` | Persisted commands per state version | `(zoneId, commandVersion)` unique |
 | `manual_overrides` | Admin override records | `(zoneId, active)` |
 | `predictions` | ML/AI advisory predictions | `(zoneId, predictedAt)` |
 | `natural_language_reports` | NLP incident reports | `(userId, createdAt)` |
@@ -47,7 +47,7 @@ MongoDB does not have cross-collection foreign keys. Integrity is enforced by:
   "criticalSince": "2026-07-25T08:20:10Z",
   "consecutiveCriticalReadings": 5,
   "fireConfirmed": true,
-  "stateVersion": 42,
+  "commandVersion": 42,
   "updatedAt": "2026-07-25T08:20:45Z"
 }
 ```
@@ -78,7 +78,7 @@ MongoDB does not have cross-collection foreign keys. Integrity is enforced by:
   "id": "uuid",
   "zoneId": "uuid",
   "incidentId": "uuid",
-  "stateVersion": 42,
+  "commandVersion": 42,
   "safetyState": "CRITICAL",
   "led": "RED",
   "buzzer": true,

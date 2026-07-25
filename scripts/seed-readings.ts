@@ -61,8 +61,54 @@ async function main() {
     await c.readings.insertMany(docs, { ordered: false }).catch(() => {});
   }
 
+  console.log(`\nSeeding representative incidents for performance tests...`);
+  const incidents = [];
+  const events = [];
+  for (let i = 0; i < 200; i++) {
+    const zone = zones[i % zones.length];
+    const incidentId = id();
+    const startedAt = new Date(Date.now() - (300 - i) * 86400000);
+    const resolvedAt = new Date(startedAt.getTime() + 3600000);
+    incidents.push({
+      id: incidentId,
+      zoneId: zone.id,
+      status: "RESOLVED" as const,
+      active: false,
+      severity: "CRITICAL" as const,
+      primaryHazard: "FIRE" as const,
+      peakRiskScore: 90 + Math.random() * 10,
+      initialRiskScore: 65 + Math.random() * 5,
+      version: 1,
+      startedAt,
+      acknowledgedAt: new Date(startedAt.getTime() + 10000),
+      acknowledgedBy: null,
+      resolvedAt,
+      resolutionReason: "TEST_INCIDENT",
+      createdAt: startedAt,
+      updatedAt: resolvedAt,
+      // Legacy fields
+      openedAt: startedAt,
+      riskScore: 90 + Math.random() * 10,
+      hazard: "FIRE" as const,
+      commandVersion: 1,
+    });
+    events.push({
+      id: id(), incidentId, zoneId: zone.id,
+      eventType: "INCIDENT_OPENED" as const, eventSource: "BACKEND" as const,
+      actorUserId: null, description: "Incident started", metadata: {}, occurredAt: startedAt,
+    });
+    events.push({
+      id: id(), incidentId, zoneId: zone.id,
+      eventType: "INCIDENT_RESOLVED" as const, eventSource: "BACKEND" as const,
+      actorUserId: null, description: "Incident resolved", metadata: {}, occurredAt: resolvedAt,
+    });
+  }
+  await c.incidents.insertMany(incidents, { ordered: false }).catch(() => {});
+  await c.incident_events.insertMany(events, { ordered: false }).catch(() => {});
+
   const count = await c.readings.countDocuments();
-  console.log(`\nSeeded. Total readings in DB: ${count}`);
+  const incCount = await c.incidents.countDocuments();
+  console.log(`Seeded. Total readings: ${count}, incidents: ${incCount}`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
