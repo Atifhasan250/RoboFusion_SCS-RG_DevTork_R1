@@ -4,7 +4,7 @@
 
 // --- Configuration ---
 // IMPORTANT: Replace this with your ngrok URL or real backend URL (no trailing slash)
-const char* BACKEND_URL = "https://YOUR_NGROK_URL.ngrok-free.app"; 
+const char* BACKEND_URL = "https://robofusion-scs-rg-devtork-r1.onrender.com"; 
 const char* ZONE_CODE = "IOT_LAB";
 const char* ZONE_API_KEY = "IOT_LAB-demo-key";
 
