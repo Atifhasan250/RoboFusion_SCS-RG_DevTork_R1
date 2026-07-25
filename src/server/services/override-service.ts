@@ -46,7 +46,7 @@ export async function applyOverride(input: OverrideInput, userId: string) {
       }
 
       // Fetch latest command to base the new state on
-      const latestCmd = await c.actuator_commands.findOne({ zoneId: zone.id }, { session, sort: { stateVersion: -1 } });
+      const latestCmd = await c.actuator_commands.findOne({ zoneId: zone.id }, { session, sort: { commandVersion: -1 } });
       
       let led = latestCmd?.led ?? "GREEN";
       let buzzer = latestCmd?.buzzer ?? false;
@@ -71,7 +71,7 @@ export async function applyOverride(input: OverrideInput, userId: string) {
         id: id(),
         zoneId: zone.id,
         incidentId: latestCmd?.incidentId ?? null,
-        stateVersion: newCommandVersion,
+        commandVersion: newCommandVersion,
         safetyState: latestCmd?.safetyState ?? "SAFE",
         led,
         buzzer,
@@ -143,41 +143,54 @@ export async function clearOverride(zoneCode: string, userId: string) {
   if (!zone) throw Object.assign(new Error("Zone not found"), { httpStatus: 404, code: "NOT_FOUND" });
 
   const now = new Date();
-  const result = await c.manual_overrides.findOneAndUpdate(
-    { zoneId: zone.id, active: true },
-    { $set: { active: false, status: "CLEARED", clearedAt: now } },
-    { returnDocument: "after" }
-  );
-  if (!result) throw Object.assign(new Error("No active override for this zone"), { httpStatus: 404, code: "NOT_FOUND" });
+  const client = await mongoClient();
+  const session = client.startSession();
+  
+  try {
+    let result;
+    const newCommandVersion = zone.commandVersion + 1;
+    await session.withTransaction(async () => {
+      result = await c.manual_overrides.findOneAndUpdate(
+        { zoneId: zone.id, active: true },
+        { $set: { active: false, status: "CLEARED", clearedAt: now } },
+        { returnDocument: "after", session }
+      );
+      if (!result) throw Object.assign(new Error("No active override for this zone"), { httpStatus: 404, code: "NOT_FOUND" });
 
-  const newCommandVersion = zone.commandVersion + 1;
-  const newCmdState = zone.connectivityState === "OFFLINE" ? "OFFLINE" : zone.state === "NOT_CONFIGURED" ? "SAFE" : zone.state;
-  const cmdLed = newCmdState === "CRITICAL" ? "RED" : newCmdState === "WARNING" ? "YELLOW" : newCmdState === "OFFLINE" ? "BLUE" : "GREEN";
-  const buzzer = newCmdState === "CRITICAL";
-  const relayCutoff = newCmdState === "CRITICAL";
+      const newCmdState = zone.connectivityState === "OFFLINE" ? "OFFLINE" : zone.state === "NOT_CONFIGURED" ? "SAFE" : zone.state;
+      const cmdLed = newCmdState === "CRITICAL" ? "RED" : newCmdState === "WARNING" ? "YELLOW" : newCmdState === "OFFLINE" ? "BLUE" : "GREEN";
+      const buzzer = newCmdState === "CRITICAL";
+      const relayCutoff = newCmdState === "CRITICAL";
 
-  const updateRes = await c.zones.updateOne(
-    { id: zone.id, commandVersion: zone.commandVersion },
-    { $set: { commandVersion: newCommandVersion, updatedAt: now } }
-  );
-  if (updateRes.matchedCount === 0) {
-    throw Object.assign(new Error("Concurrent modification detected, please retry"), { httpStatus: 409, code: "CONCURRENT_UPDATE" });
+      const updateRes = await c.zones.updateOne(
+        { id: zone.id, commandVersion: zone.commandVersion },
+        { $set: { commandVersion: newCommandVersion, updatedAt: now } },
+        { session }
+      );
+      if (updateRes.matchedCount === 0) {
+        throw Object.assign(new Error("Concurrent modification detected, please retry"), { httpStatus: 409, code: "CONCURRENT_UPDATE" });
+      }
+
+      await c.actuator_commands.insertOne({
+        id: id(),
+        zoneId: zone.id,
+        incidentId: null, // the actual incidentId would be better if we fetched it, but this is fine for fallback
+        commandVersion: newCommandVersion,
+        safetyState: newCmdState,
+        led: cmdLed,
+        buzzer,
+        relayCutoff,
+        commandSource: "SYSTEM_RECOVERY",
+        createdAt: now,
+        acknowledgedAt: null,
+        appliedAt: null
+      }, { session });
+    });
+  } finally {
+    await session.endSession();
   }
 
-  await c.actuator_commands.insertOne({
-    id: id(),
-    zoneId: zone.id,
-    incidentId: null, // the actual incidentId would be better if we fetched it, but this is fine for fallback
-    stateVersion: newCommandVersion,
-    safetyState: newCmdState,
-    led: cmdLed,
-    buzzer,
-    relayCutoff,
-    commandSource: "SYSTEM_RECOVERY",
-    createdAt: now,
-    acknowledgedAt: null,
-    appliedAt: null
-  });
+  const result = await c.manual_overrides.findOne({ zoneId: zone.id }, { sort: { _id: -1 } }); // Fetch latest to get ID for metadata
 
   await c.incident_events.insertOne({
     id: id(), incidentId: null, zoneId: zone.id, eventType: "MANUAL_OVERRIDE_CLEARED",

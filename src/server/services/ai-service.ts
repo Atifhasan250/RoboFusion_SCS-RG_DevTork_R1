@@ -4,7 +4,7 @@ import { noteSchema } from "../validation/schemas";
 import { log } from "../utils/logger";
 
 const signalSchema = z.object({
-  zoneCode: z.string().regex(/^[A-Z_]+$/),
+  zoneCode: z.enum(["IOT_LAB", "ROBOTICS_LAB", "SERVER_ROOM", "DATA_SCIENCE_LAB", "SOFTWARE_LAB"]),
   hazard: z.enum(["FIRE", "GAS", "FLOOD", "OCCUPANCY"]),
   severity: z.enum(["LOW", "MEDIUM", "HIGH"]),
   summary: z.string().min(1).max(300),
@@ -107,6 +107,14 @@ export async function parseIncidentNote(text: string): Promise<{ signal: z.infer
   for (const [name, call] of providers) {
     try {
       const signal = await call(text);
+      
+      const { collections } = await import("../db/collections");
+      const c = await collections();
+      const zoneExists = await c.zones.findOne({ code: signal.zoneCode });
+      if (!zoneExists) {
+        throw new Error("INVALID_ZONE_CODE");
+      }
+
       log("NLP_VALIDATED", { provider: name, status: "accepted" });
       return { signal, provider: name };
     } catch (error) {
@@ -119,6 +127,13 @@ export async function parseIncidentNote(text: string): Promise<{ signal: z.infer
   if (signal.zoneCode as string === "UNKNOWN" || signal.hazard as string === "UNKNOWN") {
     throw new Error("AMBIGUOUS_REPORT");
   }
+  const { collections } = await import("../db/collections");
+  const c = await collections();
+  const zoneExists = await c.zones.findOne({ code: signal.zoneCode });
+  if (!zoneExists) {
+    throw new Error("INVALID_ZONE_CODE");
+  }
+
   log("NLP_VALIDATED", { provider: "deterministic", status: "accepted" });
   return { signal, provider: "deterministic" };
 }

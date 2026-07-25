@@ -84,7 +84,7 @@ export async function POST(
   const now = new Date();
   const result = await c.actuator_commands.findOneAndUpdate(
     { id: body.command_id, zoneId: zone.id },
-    { $set: { acknowledgedAt: now, appliedAt: now } },
+    [ { $set: { acknowledgedAt: now, appliedAt: { $ifNull: ["$appliedAt", now] } } } ],
     { returnDocument: "after", projection: { _id: 0 } }
   );
 

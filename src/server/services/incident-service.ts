@@ -101,9 +101,9 @@ export async function priorityQueue() {
       const hasRecentHighSeverityNlp = inc.nlpReports?.some(
         r => r.estimatedSeverity === "HIGH" && r.validationStatus === "ACCEPTED" && (Date.now() - new Date(r.createdAt).getTime() < 24 * 60 * 60 * 1000)
       );
-      const riskScore = Math.min(100, baseRiskScore + (hasRecentHighSeverityNlp ? 15 : 0));
+      const riskScore = baseRiskScore;
       
-      const pScore = priorityScore(riskScore, occupied, criticalSince);
+      const pScore = priorityScore(riskScore, occupied, criticalSince) + (hasRecentHighSeverityNlp ? 15 : 0);
       const durationSecs = Math.max(0, (Date.now() - new Date(criticalSince).getTime()) / 1000);
       const durationBonus = Math.min(10, durationSecs / 30);
       

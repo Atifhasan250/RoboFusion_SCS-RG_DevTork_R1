@@ -51,11 +51,22 @@ async function main() {
             connectivityState: "OFFLINE",
             riskScore: 0,
             riskComponents: { fire: 0, gas: 0, water: 0, occupancy: 0 },
-            fireConfirmed: false,
+            primaryHazard: "NONE",
+            occupied: false,
+            lastReadingId: null,
+            lastObservedAt: null,
+            lastReceivedAt: null,
+            warningSince: null,
+            criticalSince: null,
+            recoverySince: null,
+            consecutiveWarningReadings: 0,
+            consecutiveCriticalReadings: 0,
+            consecutiveSafeReadings: 0,
             firePositiveCount: 0,
             fireClearCount: 0,
+            fireConfirmed: false,
+            fireConfirmedAt: null,
             stateVersion: 0,
-            lastObservedAt: now,
             updatedAt: now
           }
         },
@@ -63,6 +74,31 @@ async function main() {
       );
     }
   }
+
+  // Repair existing corrupted zone_states (if any)
+  console.log("Repairing existing zone_states if necessary...");
+  await c.zone_states.updateMany(
+    {
+      $or: [
+        { consecutiveWarningReadings: { $exists: false } },
+        { consecutiveWarningReadings: { $type: "double" } }, // In MongoDB, JS NaN often maps to double NaN
+        { lastObservedAt: { $exists: false } }
+      ]
+    },
+    {
+      $set: {
+        consecutiveWarningReadings: 0,
+        consecutiveCriticalReadings: 0,
+        consecutiveSafeReadings: 0,
+        firePositiveCount: 0,
+        fireClearCount: 0,
+        fireConfirmed: false,
+        primaryHazard: "NONE",
+        occupied: false,
+        stateVersion: 0
+      }
+    }
+  );
 
   const password = process.env.DEMO_PASSWORD ?? "ChangeMe123!";
   const users = [

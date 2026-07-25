@@ -57,7 +57,7 @@ const migrations = [
         // acknowledgments — unique per incident
         d.collection("acknowledgments").createIndex({ incidentId: 1 }, { unique: true }),
         // actuator_commands — unique per zone+version
-        d.collection("actuator_commands").createIndex({ zoneId: 1, stateVersion: 1 }, { unique: true }),
+        d.collection("actuator_commands").createIndex({ zoneId: 1, commandVersion: 1 }, { unique: true }),
         d.collection("actuator_commands").createIndex({ zoneId: 1, createdAt: -1 }),
         // manual_overrides
         d.collection("manual_overrides").createIndex({ zoneId: 1, active: 1 }),
@@ -169,7 +169,7 @@ const migrations = [
             properties: {
               zoneId: { bsonType: "string" },
               safetyState: { enum: ["SAFE", "WARNING", "CRITICAL"] },
-              connectivityState: { enum: ["ONLINE", "OFFLINE"] },
+              connectivityState: { enum: ["ONLINE", "DEGRADED", "OFFLINE", "NOT_CONFIGURED"] },
               riskScore: { bsonType: ["int", "double", "long"] },
               riskComponents: {
                 bsonType: "object",
@@ -179,8 +179,8 @@ const migrations = [
               firePositiveCount: { bsonType: ["int", "double", "long"] },
               fireClearCount: { bsonType: ["int", "double", "long"] },
               stateVersion: { bsonType: ["int", "double", "long"] },
-              lastObservedAt: { bsonType: "date" },
-              updatedAt: { bsonType: "date" }
+              lastObservedAt: { bsonType: ["date", "null"] },
+              updatedAt: { bsonType: ["date", "null"] },
             }
           }
         },

@@ -40,6 +40,7 @@ const int MAX_QUEUE = 120;
 
 bool pirState = false;
 unsigned long pirHighStart = 0;
+unsigned long pirLowStart = 0;
 String offlineQueue[MAX_QUEUE];
 int queueHead = 0;
 int queueTail = 0;
@@ -120,7 +121,24 @@ bool sendPostRequest(String requestBody, bool isQueued) {
   bool success = false;
   int httpResponseCode = http.POST(requestBody);
   if (httpResponseCode > 0) {
-    if (httpResponseCode == 200 || httpResponseCode == 201) success = true;
+    if (httpResponseCode == 200 || httpResponseCode == 201) {
+      success = true;
+      String responseStr = http.getString();
+      StaticJsonDocument<256> respDoc;
+      if (!isQueued && !responseStr.isEmpty()) {
+        DeserializationError err = deserializeJson(respDoc, responseStr);
+        if (!err && respDoc.containsKey("command") && !respDoc["command"].isNull()) {
+          applyActuators(
+            respDoc["command"]["buzzer"],
+            respDoc["command"]["led"],
+            respDoc["command"]["relay_cutoff"]
+          );
+          if (respDoc["command"]["command_id"] && !respDoc["command"]["command_id"].isNull()) {
+            acknowledgeCommand(respDoc["command"]["command_id"]);
+          }
+        }
+      }
+    }
     if (httpResponseCode != 200 && httpResponseCode != 201) {
       Serial.print("API Error ");
       Serial.print(httpResponseCode);
@@ -143,9 +161,11 @@ void sendReadings() {
   if (rawMotion == HIGH) {
     if (pirHighStart == 0) pirHighStart = millis();
     if (millis() - pirHighStart >= 1000) pirState = true;
+    pirLowStart = 0;
   } else {
+    if (pirLowStart == 0) pirLowStart = millis();
+    if (millis() - pirLowStart >= 2000) pirState = false;
     pirHighStart = 0;
-    pirState = false;
   }
   bool cameraOcc = (digitalRead(PIN_CAMERA) == LOW);
 
@@ -153,7 +173,7 @@ void sendReadings() {
   doc["bootId"] = bootId;
   doc["sequence"] = sequence++;
   String ts = getTimestamp();
-  if (ts == "") ts = "2026-07-25T12:00:00Z";
+  if (ts == "") return; // Wait for NTP sync
   doc["timestamp"] = ts;
   doc["fire"] = (fireVal == 1);
   doc["gas"] = gasVal;
@@ -253,7 +273,7 @@ void acknowledgeCommand(String commandId) {
 
 String getTimestamp() {
   struct tm timeinfo;
-  if(!getLocalTime(&timeinfo, 10)){
+  if(!getLocalTime(&timeinfo, 5000)){
     return ""; 
   }
   char timeStringBuff[50];

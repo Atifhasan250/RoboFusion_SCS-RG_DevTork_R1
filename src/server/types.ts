@@ -198,7 +198,7 @@ export interface ActuatorCommand {
   id: string;
   zoneId: string; // ref → zones.id
   incidentId: string | null; // ref → incidents.id
-  stateVersion: number;
+  commandVersion: number;
   safetyState: SafetyState | "OFFLINE";
   led: LedState;
   buzzer: boolean;

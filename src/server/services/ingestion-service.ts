@@ -30,14 +30,14 @@ function computeFactors(data: Payload, fireConfirmed: boolean, warmingUp: boolea
   return { gasFactor, waterFactor, occupancy, fireConfirmed };
 }
 
-function buildCommand(state: SafetyState | "OFFLINE", stateVersion: number, zoneId: string, incidentId: string | null): Omit<ActuatorCommand, "_id"> {
+function buildCommand(state: SafetyState | "OFFLINE", commandVersion: number, zoneId: string, incidentId: string | null): Omit<ActuatorCommand, "_id"> {
   const critical = state === "CRITICAL";
   const warning = state === "WARNING";
   return {
     id: id(),
     zoneId,
     incidentId,
-    stateVersion,
+    commandVersion,
     safetyState: state === "OFFLINE" ? "OFFLINE" : state as SafetyState,
     led: critical ? "RED" : warning ? "YELLOW" : state === "OFFLINE" ? "BLUE" : "GREEN",
     buzzer: critical,
@@ -87,7 +87,7 @@ export async function ingest(zoneCode: string, key: string | null, data: Payload
               duplicate: true,
               reading_id: existingReading?.id,
               zone: { safety_state: zone.state, connectivity_state: zone.connectivityState ?? "ONLINE", risk_score: zone.riskScore, state_version: zone.commandVersion },
-              command: latestCmd ? { command_id: latestCmd.id, state_version: latestCmd.stateVersion, led: latestCmd.led, buzzer: latestCmd.buzzer, relay_cutoff: latestCmd.relayCutoff } : null,
+              command: latestCmd ? { command_id: latestCmd.id, command_version: latestCmd.commandVersion, led: latestCmd.led, buzzer: latestCmd.buzzer, relay_cutoff: latestCmd.relayCutoff } : null,
             };
           }
         } else {
@@ -117,14 +117,14 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload) {
   const bootId = data.bootId ?? "default";
   const existingReading = await c.readings.findOne({ zoneId: zone.id, bootId, sequence: data.sequence });
   if (existingReading) {
-    const latestCmd = await c.actuator_commands.findOne({ zoneId: zone.id }, { sort: { stateVersion: -1 } });
+    const latestCmd = await c.actuator_commands.findOne({ zoneId: zone.id }, { sort: { commandVersion: -1 } });
     log("READING_DUPLICATE", { zone_code: zoneCode, sequence: data.sequence });
     return {
       accepted: false,
       duplicate: true,
       reading_id: existingReading.id,
       zone: { safety_state: zone.state, connectivity_state: zone.connectivityState ?? "ONLINE", risk_score: zone.riskScore, state_version: zone.commandVersion },
-      command: latestCmd ? { command_id: latestCmd.id, state_version: latestCmd.stateVersion, led: latestCmd.led, buzzer: latestCmd.buzzer, relay_cutoff: latestCmd.relayCutoff } : null,
+      command: latestCmd ? { command_id: latestCmd.id, command_version: latestCmd.commandVersion, led: latestCmd.led, buzzer: latestCmd.buzzer, relay_cutoff: latestCmd.relayCutoff } : null,
     };
   }
 
@@ -315,7 +315,7 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload) {
         // 3. Update zone snapshot (for fast reads)
         await c.zones.updateOne(
           { id: zone.id },
-          { $set: { state: nextSafetyState, riskScore: risk.score, primaryHazard: risk.primaryHazard, occupancy, connectivityState, lastReadingAt: data.timestamp, lastSequence: data.sequence, commandVersion: newStaleVersion, updatedAt: now } },
+          { $set: { state: nextSafetyState, riskScore: risk.score, primaryHazard: risk.primaryHazard, occupancy, connectivityState, lastReadingAt: data.timestamp, lastSequence: data.sequence, updatedAt: now } },
           { session }
         );
 
@@ -387,7 +387,7 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload) {
       }
 
       // 6. Persist actuator command (only if state changed or new command version)
-      const prevCmd = await c.actuator_commands.findOne({ zoneId: zone.id }, { session, sort: { stateVersion: -1 } });
+      const prevCmd = await c.actuator_commands.findOne({ zoneId: zone.id }, { session, sort: { commandVersion: -1 } });
       const newCmdState = connectivityState === "OFFLINE" ? "OFFLINE" : nextSafetyState;
       const cmdLed = newCmdState === "CRITICAL" ? "RED" : newCmdState === "WARNING" ? "YELLOW" : newCmdState === "OFFLINE" ? "BLUE" : "GREEN";
 
@@ -413,7 +413,10 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload) {
 
       // Only create a new command doc if the actuator state actually changed
       if (!prevCmd || prevCmd.led !== cmdLed || prevCmd.buzzer !== cmdBuzzer || prevCmd.relayCutoff !== cmdRelay) {
-        const newCmd = buildCommand(newCmdState as SafetyState | "OFFLINE", newStaleVersion, zone.id, openIncident?.id ?? null);
+        const newCommandVersion = zone.commandVersion + 1;
+        await c.zones.updateOne({ id: zone.id }, { $set: { commandVersion: newCommandVersion } }, { session });
+        
+        const newCmd = buildCommand(newCmdState as SafetyState | "OFFLINE", newCommandVersion, zone.id, openIncident?.id ?? null);
         newCmd.buzzer = cmdBuzzer;
         newCmd.relayCutoff = cmdRelay;
         await c.actuator_commands.insertOne(newCmd, { session });
@@ -502,7 +505,7 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload) {
     },
     command: command ? {
       command_id: (command as ActuatorCommand).id,
-      state_version: (command as ActuatorCommand).stateVersion,
+      command_version: (command as ActuatorCommand).commandVersion,
       led: (command as ActuatorCommand).led,
       buzzer: (command as ActuatorCommand).buzzer,
       relay_cutoff: (command as ActuatorCommand).relayCutoff,

@@ -40,12 +40,12 @@ function generateTimeSeriesData(numSequences = 100, length = 50): Sample[] {
       }
       occ = rand() > 0.5 ? 1 : 0;
       
-      const risk = Math.min(100, 70 * fire + 70 * gas + 70 * water + 10 * occ);
+      const risk = Math.min(100, 40 * fire + 25 * gas + 20 * water + 15 * occ);
       trajectory.push({ gas, water, fire, occ, risk });
     }
     
-    // We want to predict if it will be CRITICAL (risk >= 65) in 5 steps (time horizon)
-    const horizon = 5;
+    // We want to predict if it will be CRITICAL (risk >= 65) in the next 5 minutes (600 readings at 500ms)
+    const horizon = 600;
     for (let t = 1; t < length - horizon; t++) {
       const current = trajectory[t];
       const prev = trajectory[t-1];
@@ -67,24 +67,7 @@ function generateTimeSeriesData(numSequences = 100, length = 50): Sample[] {
     }
   }
   
-  // Balance the dataset
-  const positives = samples.filter(s => s.y === 1);
-  const negatives = samples.filter(s => s.y === 0);
-  const minCount = Math.min(positives.length, negatives.length);
-  
-  // Downsample to match class balance
-  const balanced = [
-    ...positives.slice(0, minCount),
-    ...negatives.slice(0, minCount)
-  ];
-  
-  // Shuffle
-  for (let i = balanced.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [balanced[i], balanced[j]] = [balanced[j], balanced[i]];
-  }
-  
-  return balanced;
+  return samples;
 }
 
 function train(rows: Sample[]) {
@@ -130,11 +113,25 @@ function evaluate(rows: Sample[], w: number[]) {
   };
 }
 
+function balanceAndShuffle(samples: Sample[]): Sample[] {
+  const positives = samples.filter(s => s.y === 1);
+  const negatives = samples.filter(s => s.y === 0);
+  const minCount = Math.min(positives.length, negatives.length);
+  if (minCount === 0) return samples;
+  const balanced = [
+    ...positives.slice(0, minCount),
+    ...negatives.slice(0, minCount)
+  ];
+  for (let i = balanced.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [balanced[i], balanced[j]] = [balanced[j], balanced[i]];
+  }
+  return balanced;
+}
+
 async function main() {
-  const rows = generateTimeSeriesData(200, 50);
-  const split = Math.floor(rows.length * 0.8);
-  const trainData = rows.slice(0, split);
-  const testData = rows.slice(split);
+  const trainData = balanceAndShuffle(generateTimeSeriesData(160, 1000));
+  const testData = balanceAndShuffle(generateTimeSeriesData(40, 1000));
   
   const weights = train(trainData);
   const metrics = evaluate(testData, weights);
@@ -143,7 +140,7 @@ async function main() {
   await writeFile("models/risk-model-v1.json", JSON.stringify({
     version: "v1",
     algorithm: "logistic-regression-gradient-descent",
-    trainingData: "Synthetic simulated multi-sensor time-series (Horizon=5)",
+    trainingData: "Synthetic simulated multi-sensor time-series (Horizon=600)",
     features: ["gas", "water", "fire", "occupancy", "slope"],
     intercept: weights[0],
     coefficients: Object.fromEntries(["gas", "water", "fire", "occupancy", "slope"].map((n, i) => [n, weights[i + 1]])),
@@ -152,7 +149,7 @@ async function main() {
   
   await writeFile("models/metrics-v1.json", JSON.stringify({
     ...metrics,
-    dataset: { total: rows.length, train: trainData.length, test: testData.length },
+    dataset: { total: trainData.length + testData.length, train: trainData.length, test: testData.length },
     note: "Simulated prediction of CRITICAL threshold crossing within future horizon."
   }, null, 2));
   

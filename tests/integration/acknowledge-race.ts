@@ -59,7 +59,7 @@ async function main() {
   if (!incidentId) {
     console.log("⚠ No open incident found. Trigger one by sending CRITICAL readings first.");
     console.log("  Example: POST /api/v1/readings/IOT_LAB with fire=true + high gas");
-    process.exit(0);
+    process.exit(1);
   }
 
   console.log(`Testing with incident: ${incidentId}`);

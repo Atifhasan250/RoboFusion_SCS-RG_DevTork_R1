@@ -109,7 +109,7 @@ async function main() {
     console.error(`\nTest FAILED: ${failed} writes were rejected`);
     process.exit(1);
   }
-  if (recentReadings.length < writes.length * 0.9) {
+  if (recentReadings.length < writes.length) {
     console.error(`\nTest FAILED: only ${recentReadings.length}/${writes.length} readings persisted`);
     process.exit(1);
   }

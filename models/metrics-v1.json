@@ -1,23 +1,23 @@
 {
-  "accuracy": 0.8955938697318008,
-  "precision": 0.995249406175772,
-  "recall": 0.7965779467680608,
-  "specificity": 0.9961389961389961,
-  "f1": 0.8848996832101371,
+  "accuracy": 1,
+  "precision": 1,
+  "recall": 1,
+  "specificity": 0,
+  "f1": 1,
   "confusionMatrix": [
     [
-      516,
-      2
+      0,
+      0
     ],
     [
-      107,
-      419
+      0,
+      15960
     ]
   ],
   "dataset": {
-    "total": 5220,
-    "train": 4176,
-    "test": 1044
+    "total": 79800,
+    "train": 63840,
+    "test": 15960
   },
   "note": "Simulated prediction of CRITICAL threshold crossing within future horizon."
 }
