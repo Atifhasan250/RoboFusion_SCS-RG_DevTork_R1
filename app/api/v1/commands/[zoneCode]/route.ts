@@ -28,7 +28,7 @@ export async function GET(
   // Get the latest persisted actuator command
   const latestCmd = await c.actuator_commands.findOne(
     { zoneId: zone.id },
-    { sort: { stateVersion: -1 }, projection: { _id: 0 } }
+    { sort: { commandVersion: -1 }, projection: { _id: 0 } }
   );
 
   if (!latestCmd) {
@@ -46,7 +46,7 @@ export async function GET(
 
   return NextResponse.json({
     command_id: latestCmd.id,
-    state_version: latestCmd.stateVersion,
+    command_version: latestCmd.commandVersion,
     safety_state: latestCmd.safetyState,
     led: latestCmd.led,
     buzzer: latestCmd.buzzer,

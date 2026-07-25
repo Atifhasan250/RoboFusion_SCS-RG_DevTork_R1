@@ -146,9 +146,9 @@ export async function clearOverride(zoneCode: string, userId: string) {
   const client = await mongoClient();
   const session = client.startSession();
   
+  let newCommandVersion = zone.commandVersion + 1;
   try {
     let result;
-    const newCommandVersion = zone.commandVersion + 1;
     await session.withTransaction(async () => {
       result = await c.manual_overrides.findOneAndUpdate(
         { zoneId: zone.id, active: true },
@@ -196,7 +196,7 @@ export async function clearOverride(zoneCode: string, userId: string) {
     id: id(), incidentId: null, zoneId: zone.id, eventType: "MANUAL_OVERRIDE_CLEARED",
     eventSource: "MANUAL_OVERRIDE", actorUserId: userId,
     description: `Manual override cleared by user ${userId}`,
-    metadata: { overrideId: result.id }, occurredAt: now,
+    metadata: { overrideId: result?.id }, occurredAt: now,
   });
 
   await c.audits.insertOne({ id: id(), type: "MANUAL_OVERRIDE_CLEARED", zoneId: zone.id, actorId: userId, createdAt: now });
