@@ -2,10 +2,6 @@
 **Team:** DevTork  
 **Track:** Full-stack Backend + Wokwi Simulation
 
-![System Status](https://img.shields.io/badge/Backend-100%25_Ready-brightgreen)
-![Tests](https://img.shields.io/badge/Tests-Passing-success)
-![MongoDB](https://img.shields.io/badge/Database-ACID_Transactions-blue)
-
 ## 🎥 Video Demonstration
 > **[Watch our 7-minute System Walkthrough on Google Drive]**(Link_Here)
 
