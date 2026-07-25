@@ -1,0 +1,614 @@
+openapi: "3.1.0"
+info:
+  title: SCS-RG — Smart Campus Safety & Response Grid API
+  version: "1.0.0"
+  description: |
+    Backend API for Multi-Hazard Smart Campus Safety & Response Grid.
+    Handles sensor ingestion, risk fusion, incident lifecycle, priority ranking,
+    and actuator commands for campus zone monitoring (RoboFusion Track B).
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+
+components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: scs_session
+    ZoneApiKey:
+      type: apiKey
+      in: header
+      name: x-zone-api-key
+  schemas:
+    SafetyState:
+      type: string
+      enum: [SAFE, WARNING, CRITICAL, OFFLINE, NOT_CONFIGURED]
+    ConnectivityState:
+      type: string
+      enum: [ONLINE, DEGRADED, OFFLINE, NOT_CONFIGURED]
+    HazardType:
+      type: string
+      enum: [FIRE, GAS, FLOOD, OCCUPANCY, NONE]
+    IncidentStatus:
+      type: string
+      enum: [OPEN, ACKNOWLEDGED, RESOLVED]
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
+    Zone:
+      type: object
+      properties:
+        id: { type: string }
+        code: { type: string }
+        name: { type: string }
+        state: { $ref: "#/components/schemas/SafetyState" }
+        connectivityState: { $ref: "#/components/schemas/ConnectivityState" }
+        riskScore: { type: number, minimum: 0, maximum: 100 }
+        primaryHazard: { $ref: "#/components/schemas/HazardType" }
+        occupancy: { type: boolean }
+        lastReadingAt: { type: string, format: date-time }
+    Incident:
+      type: object
+      properties:
+        id: { type: string }
+        zoneId: { type: string }
+        status: { $ref: "#/components/schemas/IncidentStatus" }
+        active: { type: boolean }
+        severity: { type: string, enum: [CRITICAL] }
+        primaryHazard: { $ref: "#/components/schemas/HazardType" }
+        initialRiskScore: { type: number }
+        peakRiskScore: { type: number }
+        startedAt: { type: string, format: date-time }
+        acknowledgedAt: { type: string, format: date-time, nullable: true }
+        acknowledgedBy: { type: string, nullable: true }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+    PriorityQueueItem:
+      type: object
+      properties:
+        rank: { type: integer }
+        incident_id: { type: string }
+        zone_code: { type: string }
+        zone_name: { type: string }
+        risk_score: { type: number }
+        priority_score: { type: number }
+        occupancy: { type: boolean }
+        critical_duration_seconds: { type: integer }
+        primary_hazard: { $ref: "#/components/schemas/HazardType" }
+        ranking_reason: { type: string, description: "Human-readable explanation of this zone's rank" }
+    ActuatorCommand:
+      type: object
+      properties:
+        command_id: { type: string }
+        state_version: { type: integer }
+        safety_state: { $ref: "#/components/schemas/SafetyState" }
+        led: { type: string, enum: [GREEN, YELLOW, RED, BLUE, OFF] }
+        buzzer: { type: boolean }
+        relay_cutoff: { type: boolean }
+        issued_at: { type: string, format: date-time }
+
+security:
+  - SessionCookie: []
+
+paths:
+  # ── Authentication ───────────────────────────────────────────────────────────
+  /api/v1/auth/login:
+    post:
+      summary: Login and receive HttpOnly session cookie
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+            example:
+              email: admin@scs.local
+              password: ChangeMe123!
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      name: { type: string }
+                      email: { type: string }
+                      role: { type: string, enum: [ADMIN, SECURITY_STAFF] }
+                  csrfToken: { type: string }
+        "401": { description: Invalid credentials }
+        "429": { description: Rate limited — too many attempts }
+
+  /api/v1/auth/logout:
+    post:
+      summary: Invalidate session
+      tags: [Auth]
+      responses:
+        "200": { description: Logged out }
+
+  /api/v1/auth/me:
+    get:
+      summary: Get current authenticated user
+      tags: [Auth]
+      responses:
+        "200":
+          description: Current user
+        "401": { description: Not authenticated }
+
+  # ── Sensor Ingestion ─────────────────────────────────────────────────────────
+  /api/v1/readings/{zoneCode}:
+    post:
+      summary: Ingest raw sensor reading from a zone node
+      security:
+        - ZoneApiKey: []
+      tags: [Ingestion]
+      parameters:
+        - in: path
+          name: zoneCode
+          required: true
+          schema: { type: string }
+          example: IOT_LAB
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bootId, sequence, timestamp, fire, gas, water, pir, sensorHealth, deviceUptimeSeconds]
+              properties:
+                bootId: { type: string, description: "Unique boot instance ID (changes on restart)" }
+                sequence: { type: integer, minimum: 0 }
+                timestamp: { type: string, format: date-time }
+                fire: { type: boolean }
+                gas: { type: number, minimum: 0, maximum: 4095, description: "ADC value" }
+                water: { type: number, minimum: 0, maximum: 100 }
+                pir: { type: boolean }
+                cameraOccupancy: { type: boolean, nullable: true }
+                sensorHealth: { type: string, enum: [HEALTHY, DEGRADED, OFFLINE] }
+                deviceUptimeSeconds: { type: number, minimum: 0 }
+            example:
+              bootId: boot-a8f3c1
+              sequence: 1052
+              timestamp: "2026-07-25T08:20:45.120Z"
+              fire: false
+              gas: 3120
+              water: 20
+              pir: true
+              sensorHealth: HEALTHY
+              deviceUptimeSeconds: 120
+      responses:
+        "201":
+          description: Reading accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted: { type: boolean }
+                  duplicate: { type: boolean }
+                  reading_id: { type: string }
+                  zone:
+                    type: object
+                    properties:
+                      safety_state: { $ref: "#/components/schemas/SafetyState" }
+                      connectivity_state: { $ref: "#/components/schemas/ConnectivityState" }
+                      risk_score: { type: number }
+                      state_version: { type: integer }
+                  command: { $ref: "#/components/schemas/ActuatorCommand" }
+        "200": { description: Duplicate reading — state returned without reprocessing }
+        "401": { description: Invalid zone API key }
+        "404": { description: Zone not registered or not configured }
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted: { type: boolean, example: false }
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, example: INVALID_SENSOR_RANGE }
+                      field: { type: string, example: "sensors.gas" }
+                      message: { type: string }
+
+  # ── Dashboard ────────────────────────────────────────────────────────────────
+  /api/v1/dashboard/snapshot:
+    get:
+      summary: Full authoritative dashboard snapshot (zones + incidents + priority queue)
+      tags: [Dashboard]
+      responses:
+        "200":
+          description: Current system state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  snapshot_at: { type: string, format: date-time }
+                  zones:
+                    type: array
+                    items: { $ref: "#/components/schemas/Zone" }
+                  incidents:
+                    type: array
+                    items: { $ref: "#/components/schemas/Incident" }
+                  priority_queue:
+                    type: array
+                    items: { $ref: "#/components/schemas/PriorityQueueItem" }
+                  system_health:
+                    type: object
+
+  /api/v1/zones:
+    get:
+      summary: List all zones (basic)
+      tags: [Zones]
+      responses:
+        "200": { description: Zone list }
+        "401": { description: Not authenticated }
+
+  /api/v1/zones/status:
+    get:
+      summary: Live zone state with risk components and hysteresis detail
+      tags: [Zones]
+      responses:
+        "200": { description: Enriched zone list with zone_states data }
+
+  # ── Incidents ────────────────────────────────────────────────────────────────
+  /api/v1/incidents:
+    get:
+      summary: List incidents with optional filters
+      tags: [Incidents]
+      parameters:
+        - in: query
+          name: status
+          schema: { $ref: "#/components/schemas/IncidentStatus" }
+        - in: query
+          name: zoneId
+          schema: { type: string }
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+          description: Filter incidents opened after this timestamp
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+          description: Filter incidents opened before this timestamp
+      responses:
+        "200": { description: Incident list }
+        "401": { description: Not authenticated }
+
+  /api/v1/incidents/{incidentId}/acknowledge:
+    post:
+      summary: Acknowledge an open incident (race-safe)
+      tags: [Incidents]
+      parameters:
+        - in: path
+          name: incidentId
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: Acknowledged successfully }
+        "401": { description: Not authenticated }
+        "403": { description: Forbidden — insufficient role }
+        "404": { description: Incident not found }
+        "409":
+          description: Conflict — already acknowledged or resolved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: ALREADY_ACKNOWLEDGED }
+                  acknowledgedBy: { type: string }
+                  acknowledgedAt: { type: string, format: date-time }
+
+  /api/v1/incidents/{incidentId}/timeline:
+    get:
+      summary: Get incident with full event timeline
+      tags: [Incidents]
+      parameters:
+        - in: path
+          name: incidentId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Incident and ordered events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  incident: { $ref: "#/components/schemas/Incident" }
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        eventType: { type: string }
+                        eventSource: { type: string }
+                        actorUserId: { type: string, nullable: true }
+                        description: { type: string }
+                        occurredAt: { type: string, format: date-time }
+        "404": { description: Incident not found }
+
+  /api/v1/priority-queue:
+    get:
+      summary: Ranked list of open/acknowledged incidents
+      tags: [Incidents]
+      responses:
+        "200":
+          description: Priority queue with ranking reasons
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queue:
+                    type: array
+                    items: { $ref: "#/components/schemas/PriorityQueueItem" }
+
+  # ── Commands ─────────────────────────────────────────────────────────────────
+  /api/v1/commands/{zoneCode}:
+    get:
+      summary: Get latest actuator command for a zone node
+      security:
+        - ZoneApiKey: []
+      tags: [Commands]
+      parameters:
+        - in: path
+          name: zoneCode
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Current command
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActuatorCommand" }
+        "401": { description: Invalid zone API key }
+    post:
+      summary: Zone node acknowledges command applied
+      security:
+        - ZoneApiKey: []
+      tags: [Commands]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [command_id]
+              properties:
+                command_id: { type: string }
+      responses:
+        "200": { description: Command acknowledged }
+        "404": { description: Command not found }
+
+  # ── Bonus ────────────────────────────────────────────────────────────────────
+  /api/v1/trends/{zoneCode}:
+    get:
+      summary: Advisory short-term risk trend (Bonus 2)
+      tags: [Bonus]
+      parameters:
+        - in: path
+          name: zoneCode
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Trend analysis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  trend:
+                    type: object
+                    properties:
+                      status: { type: string, enum: [RISING, FALLING, STABLE, INSUFFICIENT_DATA] }
+                      slope: { type: number }
+                      window: { type: integer }
+                  advisory: { type: string }
+
+  /api/v1/predictions/{zoneCode}:
+    get:
+      summary: Advisory ML predicted risk probability (Bonus 3)
+      tags: [Bonus]
+      responses:
+        "200":
+          description: ML prediction (advisory only, never actuates hardware)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  prediction:
+                    type: object
+                    properties:
+                      probability: { type: number, minimum: 0, maximum: 1 }
+                      modelVersion: { type: string }
+                      advisoryOnly: { type: boolean, example: true }
+                  liveRiskScore: { type: number }
+                  safety: { type: string }
+
+  /api/v1/reports/note:
+    post:
+      summary: Submit natural-language incident report (Bonus 4)
+      tags: [Bonus]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  minLength: 5
+                  maxLength: 1000
+      responses:
+        "200":
+          description: Report validated and stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  signal:
+                    type: object
+                    properties:
+                      zoneCode: { type: string }
+                      hazard: { $ref: "#/components/schemas/HazardType" }
+                      severity: { type: string, enum: [LOW, MEDIUM, HIGH] }
+                      summary: { type: string }
+                  validated: { type: boolean }
+                  provider: { type: string, enum: [gemini, openrouter, deterministic] }
+                  report_id: { type: string }
+                  advisory: { type: string }
+        "422": { description: Validation rejected }
+        "429": { description: Rate limited }
+
+  # ── Admin ────────────────────────────────────────────────────────────────────
+  /api/v1/admin/override:
+    post:
+      summary: Apply manual override — Admin only
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [zoneCode, action, reason]
+              properties:
+                zoneCode: { type: string }
+                action: { type: string, enum: [SILENCE, RESET, TEST_ACTUATOR] }
+                reason: { type: string, minLength: 3 }
+                expiresInMinutes: { type: integer, default: 30 }
+      responses:
+        "200": { description: Override applied }
+        "401": { description: Not authenticated }
+        "403": { description: Forbidden — Admin role required }
+        "404": { description: Zone not found }
+    delete:
+      summary: Clear active manual override — Admin only
+      tags: [Admin]
+      parameters:
+        - in: query
+          name: zone
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Override cleared }
+        "404": { description: No active override }
+
+  /api/v1/admin/system-health:
+    get:
+      summary: System health summary — Admin only
+      tags: [Admin]
+      responses:
+        "200": { description: Health metrics }
+
+  /api/v1/admin/raw-readings:
+    get:
+      summary: Raw sensor readings — Admin only
+      tags: [Admin]
+      parameters:
+        - in: query
+          name: zone
+          schema: { type: string }
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 100, maximum: 500 }
+      responses:
+        "200": { description: Raw readings list }
+
+  # ── System ───────────────────────────────────────────────────────────────────
+  /api/v1/system/health:
+    get:
+      summary: Health check
+      security: []
+      tags: [System]
+      responses:
+        "200": { description: Healthy }
+
+  /api/v1/system/ready:
+    get:
+      summary: Readiness check (DB connection)
+      security: []
+      tags: [System]
+      responses:
+        "200": { description: Ready }
+
+  # ── WebSocket ────────────────────────────────────────────────────────────────
+  /ws:
+    get:
+      summary: "WebSocket: real-time dashboard events"
+      security:
+        - SessionCookie: []
+      tags: [WebSocket]
+      description: |
+        Upgrade to WebSocket at ws(s)://HOST/ws.
+        Authentication via session cookie required — unauthenticated connections receive 401.
+
+        On connect, server sends a SNAPSHOT event with current zones and incidents.
+
+        Event envelope:
+        ```json
+        {
+          "event_id": "uuid",
+          "event_type": "ZONE_STATE_CHANGED",
+          "occurred_at": "2026-07-25T08:20:45Z",
+          "data": {},
+          "version": 42
+        }
+        ```
+
+        Event types:
+        - SNAPSHOT
+        - ZONE_READING_UPDATED
+        - ZONE_STATE_CHANGED
+        - ZONE_CONNECTIVITY_CHANGED
+        - INCIDENT_CREATED
+        - INCIDENT_ACKNOWLEDGED
+        - INCIDENT_RESOLVED
+        - PRIORITY_QUEUE_UPDATED
+        - ACTUATOR_COMMAND_UPDATED
+        - SYSTEM_HEALTH_UPDATED
+        - TREND_UPDATED
+        - PREDICTION_UPDATED
+        - NOTIFICATION_CREATED
+      responses:
+        "101": { description: Switching protocols }
+        "401": { description: Not authenticated }

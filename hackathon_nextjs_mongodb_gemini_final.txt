@@ -1,0 +1,3966 @@
+তুমি আমাদের Hackathon Project-এর Lead Software Engineer এবং Full-Stack Developer হিসেবে কাজ করবে।
+
+PROJECT NAME:
+Multi-Hazard Smart Campus Safety & Response Grid (SCS-RG)
+
+PROJECT TYPE:
+Full-stack IoT-based Multi-Zone Emergency Monitoring, Risk Fusion, Priority Ranking and Response System
+
+
+FINAL APPROVED STACK:
+- Full-stack Framework: Next.js + TypeScript
+- Database: MongoDB Replica Set / MongoDB Atlas
+- Runtime Validation: Zod
+- Real-time: WebSocket
+- Official ML Predictor: Trained TypeScript Logistic Regression
+- Primary LLM: Gemini 3.5 Flash
+- LLM Fallback: OpenRouter
+
+TRACK:
+Track B — Wokwi Simulation
+
+TARGET USERS:
+1. Campus Security Staff
+2. Facilities Admin
+
+MY RESPONSIBILITY:
+Hardware/Wokwi Circuit তৈরি এবং UI/UX Visual Design ছাড়া Project-এর বাকি সব Software Engineering ও Frontend Implementation কাজ আমার দায়িত্ব।
+
+আমার দায়িত্বের মধ্যে থাকবে:
+
+1. Complete Software Architecture
+2. Backend API
+3. Database Design and Implementation
+4. Server-side Risk Fusion
+5. Zone State Machine
+6. Incident Management
+7. Priority Ranking
+8. Real-time WebSocket System
+9. Actuator Command Interface
+10. Frontend Implementation
+11. Authentication
+12. Role-Based Access Control
+13. Race-condition Handling
+14. Duplicate Reading Handling
+15. Offline and Reconnection Handling
+16. Backend Restart Recovery
+17. Database Backup and Retention
+18. Load Testing
+19. Integration Testing
+20. Bonus Camera Occupancy Integration
+21. Bonus Risk Trend Detection
+22. Bonus Machine Learning Prediction
+23. Bonus Natural-Language Incident Reporting
+24. Deployment
+25. GitHub Repository
+26. README
+27. API Documentation Content
+28. Database Documentation Content
+29. Architecture Documentation Content
+30. Test Evidence and Video Demonstration Support
+
+==================================================
+0. PDF ALIGNMENT VERDICT AND SCOPE CONTROL
+==================================================
+
+এই Final Specification-টি Official RoboFusion Round 1 PDF-এর Test Case 1-31 এবং Bonus 1-4 অনুযায়ী Re-audit করা হয়েছে।
+
+FINAL VERDICT:
+
+1. Original AI-generated Specification-এর Coverage শক্তিশালী ছিল এবং প্রায় সব Core/Bonus Requirement উল্লেখ করেছে।
+2. তবে Requested Stack-এর সাথে এটি Compatible ছিল না, কারণ এতে Python/FastAPI/PostgreSQL/Alembic/Scikit-learn-কেন্দ্রিক Design ছিল।
+3. MongoDB ব্যবহার করলে PDF-এর Referential Integrity, Race-condition এবং Concurrency Marks পেতে Database-level Foreign Key-এর বিকল্প হিসেবে JSON Schema Validation, Unique/Partial Index, Multi-document Transaction, Application-level Reference Check এবং Automated Integrity Test দেখাতে হবে।
+4. Gemini 3.5 Flash নিজে Bonus 3-এর “trained actual ML model” Requirement পূরণ করে না। তাই Official Predicted Risk একটি Train করা Logistic Regression Model থেকে আসবে; Gemini 3.5 Flash এবং OpenRouter Fallback ব্যবহার হবে NLP Bonus, AI Explanation এবং Optional Secondary Advisory-এর জন্য।
+5. Next.js App-কে শুধু UI হিসেবে নয়, Real Backend হিসেবে ব্যবহার করতে হলে Node.js Runtime, Persistent WebSocket Support এবং Background Scheduler নিশ্চিত করতে হবে।
+6. Core 160 marks complete হওয়ার আগে Low-value Extra Feature বানানো যাবে না।
+
+SCOPE PRIORITY:
+
+A. CORE — Must Finish First:
+- Test Case 1-31-এর Software অংশ
+- At least 3 Active Zone
+- Raw ingestion, validation, risk fusion, state machine, incidents, ranking, commands
+- Live dashboard, RBAC, history, alerts, mixed-state UX
+- MongoDB integrity, 10 concurrent writes, 10,000+ documents, backup/retention
+- End-to-end and edge-case demonstration
+- Architecture/API/Database/Formula documentation and 7-minute video support
+
+B. BONUS — Core Stable হওয়ার পরে:
+- Camera occupancy cross-check
+- Short-term risk trend
+- Trained ML predicted risk
+- Gemini/OpenRouter natural-language incident reporting
+
+C. DEFER / OPTIONAL POLISH:
+- Generic user-management UI
+- Generic zone CRUD UI
+- Large analytics suite
+- Many export formats
+- Microservices
+- Redis/BullMQ
+- Kubernetes
+- Event sourcing
+- AI call on every 500 ms sensor reading
+
+এই Optional Item-গুলো Rubric-এর Direct Mark না দিলে Core Completion-এর আগে Implement করা যাবে না।
+
+==================================================
+1. CORE PROJECT SCOPE
+==================================================
+
+System পাঁচটি Candidate Zone Support করবে:
+
+1. IoT Lab
+2. Robotics Lab
+3. Server Room
+4. Data Science Lab
+5. Software Lab
+
+Backend বা Frontend-এ Zone Hardcode করা যাবে না।
+
+সব Zone Database থেকে Dynamically Load হবে।
+
+Hardware Team যদি শুধু 3টি Zone Simulate করে, তাহলে:
+
+1. ওই 3টি Zone ACTIVE এবং CONNECTED থাকবে
+2. অন্য 2টি Zone NOT_CONFIGURED অথবা INACTIVE থাকবে
+3. Unimplemented Zone-এর জন্য Fake Live Sensor Data তৈরি করা যাবে না
+4. পরে নতুন Zone Add করলে Backend Code পরিবর্তন না করেই System-এ Add করা যাবে
+
+প্রতিটি Active Zone থেকে Backend Raw Sensor Data নেবে:
+
+1. Fire/Flame
+2. Gas
+3. Water Level
+4. PIR Occupancy
+5. Optional Camera Occupancy
+6. Sensor Health
+7. Device Uptime
+8. Sequence Number
+9. Timestamp
+
+Backend নিজে হিসাব করবে:
+
+1. Normalized Sensor Values
+2. Risk Score
+3. SAFE / WARNING / CRITICAL State
+4. Connectivity State
+5. Primary Hazard
+6. Active Incident
+7. Actuator Command
+8. Priority Ranking
+9. Risk Trend
+10. Optional Predicted Risk
+
+==================================================
+2. RECOMMENDED SOFTWARE STACK
+==================================================
+
+PRIMARY APPLICATION STACK:
+
+1. Next.js — App Router
+2. TypeScript — Strict Mode
+3. Node.js Runtime
+4. React Server Components + Client Components
+5. Next.js Route Handlers for REST API
+6. Custom/Persistent WebSocket Gateway attached to the same Node HTTP server
+7. Zod for Runtime Validation
+8. Tailwind CSS
+9. TanStack Query অথবা Typed Fetch Client
+10. Recharts/Chart.js for Trend and History
+11. Vitest for Unit/Integration Test
+12. Playwright for Browser E2E Test
+13. k6 for Load Test
+
+DATABASE:
+
+1. MongoDB Atlas অথবা Local MongoDB Replica Set
+2. Official MongoDB Node.js Driver
+3. MongoDB Client Session + Multi-document Transaction
+4. JSON Schema Collection Validators
+5. Unique, Compound, Partial এবং TTL Indexes
+6. BSON Date for all timestamps
+7. UUID String for public IDs
+8. MongoDB Standalone Final Demo-তে ব্যবহার করা যাবে না, কারণ Multi-document Transaction প্রয়োজন
+9. Local Docker Compose-এ Replica Set Initialize করতে হবে
+10. MongoDB + Application Service Layer একসঙ্গে Referential Integrity enforce করবে
+
+AI / LLM:
+
+PRIMARY:
+1. Google Gemini API
+2. Model: gemini-3.5-flash
+3. Structured JSON Output
+4. Timeout, Retry এবং Circuit-breaker
+5. Low Temperature for Classification/Extraction
+
+FALLBACK:
+1. OpenRouter API
+2. Primary fallback model slug: google/gemini-3.5-flash
+3. Additional fallback models Environment Variable দিয়ে Configure করা যাবে
+4. OpenRouter Structured Output / JSON Schema ব্যবহার করতে হবে
+5. Provider/Model failure হলে Fallback হবে; invalid business output হলে deterministic validation reject করবে
+
+ACTUAL MACHINE LEARNING FOR BONUS 3:
+
+1. TypeScript/Node-based Logistic Regression Training Script
+2. Synthetic/Simulated Dataset
+3. Train/Test Split
+4. Accuracy, Precision, Recall, F1, Confusion Matrix
+5. Model coefficients JSON file হিসেবে Versioned Save
+6. Server-side deterministic inference
+7. Gemini/OpenRouter Official ML Probability-এর substitute হবে না
+
+AUTHENTICATION:
+
+1. Secure HttpOnly Session Cookie
+2. Sessions collection
+3. Argon2id অথবা bcrypt Password Hashing
+4. CSRF Protection for state-changing browser requests
+5. Per-zone API Key authentication for Wokwi nodes
+
+DEPLOYMENT:
+
+RECOMMENDED DEMO DEPLOYMENT:
+1. Single Dockerized Next.js Node Application on a persistent Node host
+2. MongoDB Atlas
+3. HTTPS + WSS
+4. Same-origin UI/API where possible
+5. Environment Variable-based configuration
+
+ALTERNATIVE:
+- Vercel deployment ব্যবহার করা যাবে যদি WebSocket, function duration, background/offline checker এবং MongoDB connection behavior end-to-end test করা হয়।
+
+DO NOT ADD UNLESS NEEDED:
+1. Separate Python Backend
+2. PostgreSQL
+3. Redis
+4. Message Broker
+5. Kubernetes
+6. Multiple Microservices
+==================================================
+3. REPOSITORY STRUCTURE
+==================================================
+
+একটি Public GitHub Monorepo থাকবে, কিন্তু Deployment Unit একটি Next.js Application থাকবে।
+
+Recommended Structure:
+
+robofusion/
+│
+├── src/
+│   ├── app/
+│   │   ├── (auth)/
+│   │   ├── (dashboard)/
+│   │   ├── admin/
+│   │   ├── incidents/
+│   │   ├── zones/
+│   │   ├── reports/
+│   │   └── api/
+│   │       └── v1/
+│   │           ├── auth/
+│   │           ├── readings/
+│   │           ├── zones/
+│   │           ├── incidents/
+│   │           ├── priority-queue/
+│   │           ├── admin/
+│   │           ├── reports/
+│   │           ├── predictions/
+│   │           └── system/
+│   │
+│   ├── components/
+│   │   ├── dashboard/
+│   │   ├── zones/
+│   │   ├── incidents/
+│   │   ├── alerts/
+│   │   ├── charts/
+│   │   └── shared/
+│   │
+│   ├── server/
+│   │   ├── config/
+│   │   ├── db/
+│   │   │   ├── client.ts
+│   │   │   ├── collections.ts
+│   │   │   ├── validators.ts
+│   │   │   ├── indexes.ts
+│   │   │   └── transaction.ts
+│   │   ├── auth/
+│   │   ├── repositories/
+│   │   ├── services/
+│   │   │   ├── ingestion-service.ts
+│   │   │   ├── risk-service.ts
+│   │   │   ├── state-machine-service.ts
+│   │   │   ├── incident-service.ts
+│   │   │   ├── priority-service.ts
+│   │   │   ├── command-service.ts
+│   │   │   ├── override-service.ts
+│   │   │   ├── recovery-service.ts
+│   │   │   └── offline-service.ts
+│   │   ├── realtime/
+│   │   ├── jobs/
+│   │   ├── ai/
+│   │   │   ├── provider.ts
+│   │   │   ├── gemini-provider.ts
+│   │   │   ├── openrouter-provider.ts
+│   │   │   ├── schemas.ts
+│   │   │   └── validation-gate.ts
+│   │   ├── ml/
+│   │   │   ├── features.ts
+│   │   │   ├── inference.ts
+│   │   │   ├── model-loader.ts
+│   │   │   └── safety-gate.ts
+│   │   └── utils/
+│   │
+│   ├── hooks/
+│   ├── stores/
+│   ├── types/
+│   └── lib/
+│
+├── server.ts
+├── scripts/
+│   ├── migrate.ts
+│   ├── seed.ts
+│   ├── seed-readings.ts
+│   ├── train-risk-model.ts
+│   ├── evaluate-risk-model.ts
+│   ├── phantom-zones.ts
+│   ├── backup-mongodb.sh
+│   └── restore-mongodb.sh
+│
+├── models/
+│   ├── risk-model-v1.json
+│   └── metrics-v1.json
+│
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   ├── concurrency/
+│   ├── websocket/
+│   ├── e2e/
+│   └── load/
+│
+├── simulation/
+│   └── wokwi-files-or-links/
+│
+├── docs/
+│   ├── api/
+│   ├── architecture/
+│   ├── database/
+│   ├── testing/
+│   ├── video/
+│   └── screenshots/
+│
+├── docker/
+│   └── mongo-init-replica-set.js
+│
+├── docker-compose.yml
+├── openapi.yaml
+├── package.json
+├── tsconfig.json
+├── next.config.ts
+├── Dockerfile
+├── .env.example
+├── .gitignore
+├── README.md
+└── LICENSE
+
+STRUCTURE RULES:
+
+1. API Route Handler-এর ভিতরে Business Logic লেখা যাবে না।
+2. Risk, State, Incident, Priority এবং Command Logic pure/testable service-এ থাকবে।
+3. Frontend এবং API একই Type Definition share করবে।
+4. MongoDB collection access শুধু Repository/DB Layer দিয়ে হবে।
+5. WebSocket Layer Database নিজে mutate করবে না।
+6. AI Provider Layer deterministic domain logic থেকে আলাদা থাকবে।
+7. Model file এবং metrics repository-তে থাকবে।
+==================================================
+4. ROCK-SOLID SYSTEM ARCHITECTURE
+==================================================
+
+System Architecture Layers:
+
+LAYER 1 — ZONE NODE / WOKWI:
+1. Sensor Sample করবে
+2. Raw Reading পাঠাবে
+3. Sequence Number পাঠাবে
+4. Device Boot ID পাঠাবে
+5. Device Uptime পাঠাবে
+6. Backend Command গ্রহণ করবে
+7. Backend Command অনুযায়ী LED/Buzzer/Relay চালাবে
+
+Zone Node Authoritative State Source হবে না।
+
+Zone Node কখনো সরাসরি বলবে না:
+1. “I am SAFE”
+2. “I am WARNING”
+3. “I am CRITICAL”
+4. নিজের Risk Score
+
+LAYER 2 — INGESTION API:
+1. Zone Authentication
+2. Payload Validation
+3. Range Validation
+4. Duplicate Detection
+5. Timestamp Validation
+6. Warm-up Validation
+7. Raw Reading Persistence
+
+LAYER 3 — RISK ENGINE:
+1. Raw Value Normalize
+2. Fire Debounce
+3. Gas Warm-up
+4. Sensor Calibration
+5. Risk Components Calculate
+6. Final Risk Score Calculate
+7. Primary Hazard Determine
+
+LAYER 4 — STATE MACHINE:
+1. SAFE
+2. WARNING
+3. CRITICAL
+4. State Hysteresis
+5. Recovery Delay
+6. Flapping Prevention
+7. Connectivity State আলাদাভাবে Maintain
+
+LAYER 5 — INCIDENT ENGINE:
+1. Incident Open
+2. Incident Update
+3. Incident Acknowledge
+4. Incident Resolve
+5. Incident Reopen নয়
+6. নতুন Trigger হলে নতুন Incident
+
+LAYER 6 — PRIORITY ENGINE:
+1. সব Critical Zone Rank
+2. Occupancy Consider
+3. Critical Duration Consider
+4. Deterministic Tie-breaker
+5. Human-readable Ranking Reason
+
+LAYER 7 — COMMAND ENGINE:
+1. Zone State থেকে Command তৈরি
+2. LED State
+3. Buzzer State
+4. Relay State
+5. Command Database-এ Store
+6. Stale Command Prevent
+7. Duplicate Actuation Prevent
+
+LAYER 8 — DATABASE:
+1. Single Source of Truth
+2. Current State
+3. Raw Readings
+4. Incidents
+5. Events
+6. Acknowledgments
+7. Commands
+8. Users and Roles
+9. Predictions
+10. Audit Logs
+
+LAYER 9 — REAL-TIME DELIVERY:
+1. WebSocket
+2. Full Snapshot on Connection
+3. Incremental Events
+4. Reconnect Support
+5. Current State Resync
+
+LAYER 10 — FRONTEND:
+1. Backend Data Display করবে
+2. নিজের Risk Score Calculate করবে না
+3. নিজের State Guess করবে না
+4. নিজের Priority Rank Calculate করবে না
+5. Backend-কে Single Source of Truth হিসেবে ব্যবহার করবে
+
+==================================================
+5. SINGLE SOURCE OF TRUTH RULE
+==================================================
+
+System-এর Authoritative State হবে:
+
+Next.js Server Domain Services + MongoDB
+
+নিচের Rules কঠোরভাবে মানতে হবে:
+
+1. Hardware Node শুধু Raw Reading পাঠাবে
+2. Frontend শুধু Backend State দেখাবে
+3. Risk Score শুধু Server-side Risk Service হিসাব করবে
+4. Priority Ranking শুধু Server-side Priority Service হিসাব করবে
+5. Incident State শুধু Incident Service পরিবর্তন করবে
+6. Acknowledgment MongoDB Transaction-এর মাধ্যমে হবে
+7. Actuator Command Backend তৈরি করবে
+8. Current Zone State zone_states Collection-এ Persist হবে
+9. Browser Refresh বা Backend Restart-এর পরে MongoDB থেকে State পাওয়া যাবে
+10. Frontend, Backend এবং Zone Node-এ আলাদা Independent State Logic রাখা যাবে না
+11. WebSocket Event হারালেও Client Snapshot Endpoint থেকে Recover করবে
+12. Gemini/OpenRouter Output কখনো Authoritative Safety State হবে না
+13. Trained ML Prediction Live Risk Score-এর অংশ হবে না
+==================================================
+6. ZONE STATE MODEL
+==================================================
+
+Safety State এবং Connectivity State আলাদা রাখতে হবে।
+
+SAFETY STATE:
+
+1. SAFE
+2. WARNING
+3. CRITICAL
+
+CONNECTIVITY STATE:
+
+1. ONLINE
+2. DEGRADED
+3. OFFLINE
+4. NOT_CONFIGURED
+
+Sensor Disconnect হলে:
+
+1. Connectivity State = OFFLINE অথবা DEGRADED
+2. Last Known Safety State মুছে ফেলা যাবে না
+3. Zone-কে False SAFE দেখানো যাবে না
+4. Open Incident Automatically Resolve করা যাবে না
+5. Dashboard-এ “OFFLINE — Last known state CRITICAL” দেখানো যাবে
+
+Zone Current Snapshot Example:
+
+{
+  "zone_code": "IOT_LAB",
+  "safety_state": "CRITICAL",
+  "connectivity_state": "ONLINE",
+  "risk_score": 88.5,
+  "primary_hazard": "FIRE",
+  "occupied": true,
+  "critical_since": "2026-07-25T08:20:10Z",
+  "last_observed_at": "2026-07-25T08:20:45Z",
+  "state_version": 42
+}
+
+==================================================
+7. SENSOR INGESTION DATA CONTRACT
+==================================================
+
+Endpoint:
+
+POST /api/v1/readings
+
+Headers:
+
+X-Zone-Code: IOT_LAB
+X-Zone-API-Key: secret-zone-key
+Content-Type: application/json
+
+Request Body:
+
+{
+  "zone_code": "IOT_LAB",
+  "boot_id": "boot-a8f3c1",
+  "sequence": 1052,
+  "observed_at": "2026-07-25T08:20:45.120Z",
+  "uptime_ms": 612000,
+  "sample_interval_ms": 500,
+  "sensors": {
+    "fire_raw": 1,
+    "gas_raw": 3120,
+    "water_raw": 540,
+    "pir_occupied": true,
+    "camera_occupied": null
+  },
+  "sensor_status": {
+    "fire": "ONLINE",
+    "gas": "ONLINE",
+    "water": "ONLINE",
+    "pir": "ONLINE",
+    "camera": "NOT_CONFIGURED"
+  }
+}
+
+Response Body:
+
+{
+  "accepted": true,
+  "duplicate": false,
+  "reading_id": 55801,
+  "zone": {
+    "safety_state": "CRITICAL",
+    "connectivity_state": "ONLINE",
+    "risk_score": 88.5,
+    "state_version": 42
+  },
+  "command": {
+    "command_id": "cmd-uuid",
+    "state_version": 42,
+    "led": "RED",
+    "buzzer": true,
+    "relay_cutoff": true
+  }
+}
+
+এই Response-এর Command Hardware Node apply করবে।
+
+==================================================
+8. INGESTION VALIDATION
+==================================================
+
+Backend Validate করবে:
+
+1. Zone Code আছে কি না
+2. Zone Registered কি না
+3. Zone Active কি না
+4. API Key Correct কি না
+5. Sequence Integer কি না
+6. Sequence Negative কি না
+7. Timestamp Valid ISO Format কি না
+8. Timestamp খুব ভবিষ্যতের কি না
+9. Fire Raw 0 অথবা 1 কি না
+10. Gas Raw Valid ADC Range-এ কি না
+11. Water Raw Valid ADC Range-এ কি না
+12. PIR Boolean কি না
+13. Sensor Status Valid Enum কি না
+14. Required Sensor Missing কি না
+15. Payload Size Limit-এর মধ্যে কি না
+
+Reject Examples:
+
+1. Negative Water Value
+2. Gas Value ADC Range-এর বাইরে
+3. Missing Zone Code
+4. Unknown Zone
+5. Wrong API Key
+6. Invalid Timestamp
+7. Invalid Boolean
+8. Missing Required Field
+9. Unsupported Sensor Status
+
+Error Response Example:
+
+{
+  "accepted": false,
+  "error": {
+    "code": "INVALID_SENSOR_RANGE",
+    "field": "sensors.water_raw",
+    "message": "Water sensor value is outside the configured range."
+  }
+}
+
+Invalid Reading Risk Formula-তে ব্যবহার করা যাবে না।
+
+Invalid Reading Audit Log-এ Record করতে হবে।
+
+==================================================
+9. DUPLICATE READING HANDLING
+==================================================
+
+প্রতিটি Reading Unique হবে:
+
+Unique Compound Index:
+
+{ zoneId: 1, bootId: 1, sequence: 1 }
+
+unique: true
+
+Recommended Processing:
+
+1. Zone authenticate
+2. Payload validate
+3. MongoDB Session শুরু
+4. Transaction-এর ভিতরে Reading insert করার চেষ্টা
+5. Insert সফল হলে Risk/State/Incident/Command Process
+6. Duplicate Key Error E11000 হলে Transaction abort
+7. Existing Reading/Current Command fetch করে duplicate = true Return
+8. Duplicate Request-এর জন্য কোনো State Version Increment হবে না
+
+একই Reading Network Retry-এর কারণে আবার এলে:
+
+1. নতুন Reading Document তৈরি করা যাবে না
+2. Risk Score side effect আবার Apply করা যাবে না
+3. Incident আবার Create করা যাবে না
+4. Actuator Command Duplicate Generate করা যাবে না
+5. WebSocket Duplicate Event Broadcast করা যাবে না
+6. Response-এ duplicate = true Return করতে হবে
+
+Duplicate Detection শুধু Timestamp দিয়ে করা যাবে না।
+
+Sequence Number + Boot ID + Zone ID ব্যবহার করতে হবে।
+
+IMPORTANT:
+
+- Reading insert এবং derived state mutation একই Transaction boundary-তে রাখতে হবে।
+- MongoDB deployment Replica Set হতে হবে।
+- Transaction transient error হলে bounded retry ব্যবহার করতে হবে।
+==================================================
+10. OUT-OF-ORDER TIMESTAMP HANDLING
+==================================================
+
+পুরোনো Reading পরে আসতে পারে।
+
+Backend Rules:
+
+1. Reading Historical Collection-এ Save করা যেতে পারে
+2. is_late = true Mark করতে হবে
+3. Current State Update করা যাবে না
+4. Current Risk Score পিছিয়ে দেওয়া যাবে না
+5. Incident Timeline scramble করা যাবে না
+6. Cached Reading Sync করলে Observed Time Preserve করতে হবে
+
+Current State শুধু Update হবে যদি:
+
+incoming.observed_at > zone_state.last_observed_at
+
+==================================================
+11. SENSOR NORMALIZATION
+==================================================
+
+Raw ADC Reading Backend-এ Normalize করতে হবে।
+
+Sensor Calibration Database-এ থাকবে:
+
+1. raw_min
+2. raw_max
+3. baseline_raw
+4. critical_raw
+5. direction
+6. warmup_seconds
+7. enabled
+
+Gas Normalization Example:
+
+gas_factor =
+clamp(
+  (gas_raw - gas_baseline)
+  /
+  (gas_critical_raw - gas_baseline),
+  0,
+  1
+)
+
+Water Normalization Example:
+
+water_factor =
+clamp(
+  (water_raw - water_dry_raw)
+  /
+  (water_critical_raw - water_dry_raw),
+  0,
+  1
+)
+
+Fire Factor:
+
+1. Raw Fire Reading Receive হবে
+2. Backend Consecutive Reading Count করবে
+3. Debounce Complete হলে fire_factor = 1
+4. Debounce Complete না হলে fire_factor = 0
+
+Occupancy Factor:
+
+1. PIR Occupied হলে 1
+2. Empty হলে 0
+3. Bonus Camera Cross-check থাকলে Combined Occupancy ব্যবহার হবে
+
+==================================================
+12. GAS SENSOR WARM-UP
+==================================================
+
+প্রথম 30 seconds Gas Reading Alert তৈরি করবে না।
+
+Backend Determination:
+
+1. uptime_ms < 30000 হলে gas_status = WARMING_UP
+2. Gas Reading Database-এ Store করা যেতে পারে
+3. Gas Risk Contribution = 0
+4. Gas Alert তৈরি হবে না
+5. Dashboard-এ WARMING UP দেখাবে
+
+Device Restart হলে নতুন boot_id আসবে।
+
+নতুন boot_id অনুযায়ী Warm-up আবার শুরু হবে।
+
+==================================================
+13. FIRE DEBOUNCE
+==================================================
+
+Backend Authoritative Fire Debounce রাখবে।
+
+Recommended:
+
+1. Sample Interval: 500 ms
+2. Required Consecutive Positive Reading: 2
+3. অর্থাৎ প্রায় 1 second Sustained Flame
+4. Brief Flicker Ignore হবে
+5. Flame Remove হওয়ার পরে Recovery Window থাকবে
+
+Backend State:
+
+1. fire_positive_count
+2. fire_clear_count
+3. fire_confirmed
+4. fire_confirmed_at
+
+Fire Confirm Condition:
+
+fire_positive_count >= configured_debounce_count
+
+Fire Clear Condition:
+
+Configured consecutive clear readings অথবা Recovery Window complete
+
+Hardware-side Debounce থাকলেও Backend-side Debounce রাখতে হবে।
+
+==================================================
+14. RISK FUSION FORMULA
+==================================================
+
+Formula এমন হতে হবে যাতে:
+
+1. Confirmed Fire একা CRITICAL হতে পারে
+2. Severe Gas একা CRITICAL হতে পারে
+3. Severe Water Leak একা CRITICAL হতে পারে
+4. একাধিক Moderate Hazard Fusion হয়ে CRITICAL হতে পারে
+5. Occupancy একা Hazard তৈরি না করে
+6. Final Score 0-100 থাকে
+
+Recommended Formula:
+
+fire_component = 70 × fire_factor
+gas_component = 70 × gas_factor
+water_component = 70 × water_factor
+occupancy_component = 10 × occupancy_factor
+
+risk_score =
+min(
+  100,
+  fire_component
+  + gas_component
+  + water_component
+  + occupancy_component
+)
+
+Where:
+
+1. fire_factor = 0 অথবা 1, Backend Debounce-এর পরে
+2. gas_factor = 0.0 থেকে 1.0
+3. water_factor = 0.0 থেকে 1.0
+4. occupancy_factor = 0 অথবা 1
+
+Classification:
+
+risk_score < 30
+= SAFE
+
+30 <= risk_score < 65
+= WARNING
+
+risk_score >= 65
+= CRITICAL
+
+Formula Explanation:
+
+1. একটি Confirmed Fire দ্রুত Critical হতে পারবে
+2. Gas Critical Calibration Point-এ পৌঁছালে Zone Critical হবে
+3. Water Critical Calibration Point-এ পৌঁছালে Zone Critical হবে
+4. Gas ও Water দুইটি Medium Hazard একসঙ্গে Critical করতে পারবে
+5. Occupancy Risk বাড়াবে কিন্তু একা Warning/Critical করবে না
+6. Score 100-তে Cap হবে
+
+IMPORTANT:
+
+1. Final Formula Developer এবং Designer একসঙ্গে Final করবে
+2. Code, Documentation এবং Video-তে একই Formula থাকবে
+3. Formula পরিবর্তন করলে সব জায়গায় Update করতে হবে
+4. Risk Component API Response-এ আলাদাভাবে Return করতে হবে
+
+Risk Response Example:
+
+{
+  "risk_score": 88.5,
+  "components": {
+    "fire": 70,
+    "gas": 8.5,
+    "water": 0,
+    "occupancy": 10
+  }
+}
+
+==================================================
+15. STATE HYSTERESIS AND FLAPPING PREVENTION
+==================================================
+
+Zone যেন দ্রুত:
+
+CRITICAL → SAFE → CRITICAL
+
+Flip করে Duplicate Incident Flood না করে।
+
+Recommended State Rules:
+
+ENTER WARNING:
+1. Risk >= 30
+2. অন্তত 2 consecutive valid readings
+
+ENTER CRITICAL:
+1. Risk >= 65
+2. অন্তত 2 consecutive valid readings
+3. Confirmed Fire Debounce সম্পন্ন হলে Immediate Critical অনুমোদিত
+
+RECOVER CRITICAL TO WARNING:
+1. Risk < 55
+2. অন্তত 5 seconds Stable
+
+RECOVER WARNING TO SAFE:
+1. Risk < 25
+2. অন্তত 5 seconds Stable
+
+এই Difference-কে Hysteresis বলা হবে।
+
+State Transition Service এক জায়গায় থাকবে।
+
+Frontend বা API Router-এর ভিতরে State Logic লেখা যাবে না।
+
+==================================================
+16. INCIDENT LIFECYCLE
+==================================================
+
+Incident Status:
+
+1. OPEN
+2. ACKNOWLEDGED
+3. RESOLVED
+
+Incident Flow:
+
+SAFE/WARNING
+→ CRITICAL
+→ OPEN Incident
+
+OPEN
+→ Staff Acknowledge
+→ ACKNOWLEDGED
+
+Risk Recovery Complete
+→ RESOLVED
+
+MongoDB Document Rules:
+
+1. একই Zone-এর জন্য একই সময়ে একটি Active Incident থাকবে
+2. Active Incident Status OPEN বা ACKNOWLEDGED হতে পারে
+3. Incident Document-এ active: true/false থাকবে
+4. Resolve হলে active = false হবে
+5. Active Incident থাকা অবস্থায় Duplicate Incident Create হবে না
+6. Incident Resolve হলে পরে নতুন Critical Trigger নতুন Incident তৈরি করবে
+7. Incident ID UUID হবে
+8. Peak Risk Score Track করতে হবে
+9. Primary Hazard Track করতে হবে
+10. severity = CRITICAL Track করতে হবে
+11. All State Transitions incident_events Collection-এ Save হবে
+
+Required Unique Partial Index:
+
+keys:
+{ zoneId: 1, active: 1 }
+
+options:
+{
+  unique: true,
+  partialFilterExpression: { active: true }
+}
+
+এই Index নিশ্চিত করবে একটি Zone-এর একটির বেশি Active Incident থাকতে পারবে না।
+
+Incident open/update/resolve সব Transaction-এর ভিতরে zone_states update-এর সাথে coordinated হবে।
+==================================================
+17. INCIDENT EVENTS
+==================================================
+
+প্রতিটি গুরুত্বপূর্ণ ঘটনা Event হিসেবে Save করতে হবে।
+
+Event Types:
+
+1. SENSOR_READING_ACCEPTED
+2. SENSOR_READING_REJECTED
+3. SENSOR_OFFLINE
+4. SENSOR_ONLINE
+5. ZONE_WARNING
+6. ZONE_CRITICAL
+7. ZONE_SAFE
+8. INCIDENT_OPENED
+9. INCIDENT_ACKNOWLEDGED
+10. INCIDENT_RESOLVED
+11. BUZZER_ACTIVATED
+12. BUZZER_DEACTIVATED
+13. RELAY_CUTOFF_ACTIVATED
+14. RELAY_RESET
+15. MANUAL_OVERRIDE_APPLIED
+16. MANUAL_OVERRIDE_CLEARED
+17. BACKEND_RESTARTED
+18. ZONE_RECONNECTED
+19. CACHED_READINGS_SYNCED
+20. PREDICTION_UPDATED
+21. NATURAL_LANGUAGE_REPORT_ACCEPTED
+22. NATURAL_LANGUAGE_REPORT_REJECTED
+
+Event Fields:
+
+1. id
+2. incident_id
+3. zone_id
+4. event_type
+5. event_source
+6. actor_user_id
+7. occurred_at
+8. description
+9. metadata
+
+Event Source:
+
+1. SENSOR
+2. BACKEND
+3. USER
+4. MANUAL_OVERRIDE
+5. SYSTEM
+6. ML
+7. NLP
+
+==================================================
+18. PRIORITY RANKING ENGINE
+==================================================
+
+Priority Ranking শুধু বর্তমানে CRITICAL Zone-এর জন্য হবে।
+
+Ranking Factors:
+
+1. Risk Score
+2. Occupancy
+3. কত সময় ধরে Critical
+4. Deterministic Tie-breaker
+
+Recommended Formula:
+
+occupancy_bonus =
+10 if occupied
+else 0
+
+duration_bonus =
+min(
+  10,
+  critical_duration_seconds / 30
+)
+
+priority_score =
+risk_score
++ occupancy_bonus
++ duration_bonus
+
+Tie-break Order:
+
+1. Higher priority_score
+2. Higher risk_score
+3. Occupied Zone আগে
+4. Earlier critical_since আগে
+5. Zone Code Alphabetical, final deterministic fallback
+
+Ranking প্রতি State Change এবং নির্দিষ্ট Interval-এ Recalculate হবে।
+
+Ranking API-তে Return করবে:
+
+1. Rank
+2. Zone
+3. Risk Score
+4. Priority Score
+5. Occupancy
+6. Critical Duration
+7. Primary Hazard
+8. Ranking Reason
+
+Example Reason:
+
+“IoT Lab is ranked first because it has the highest risk score, multiple active hazards and confirmed occupancy.”
+
+Ranking Reason Hardcoded Static Text হবে না।
+
+Actual Factor অনুযায়ী Generate করতে হবে।
+
+==================================================
+19. ACTUATOR COMMAND ENGINE
+==================================================
+
+State অনুযায়ী Command:
+
+SAFE:
+1. LED = GREEN
+2. Buzzer = OFF
+3. Relay Cutoff = FALSE
+
+WARNING:
+1. LED = YELLOW
+2. Buzzer = OFF
+3. Relay Cutoff = FALSE
+
+CRITICAL:
+1. LED = RED
+2. Buzzer = ON
+3. Relay Cutoff = TRUE
+
+OFFLINE:
+1. Last command blindly reset করা যাবে না
+2. Last Known State Preserve করতে হবে
+3. Dashboard Offline দেখাবে
+4. Connection Restore হলে Latest Command পাঠাতে হবে
+
+Command Fields:
+
+1. command_id
+2. zone_id
+3. state_version
+4. safety_state
+5. led
+6. buzzer
+7. relay_cutoff
+8. source
+9. created_at
+10. applied_at
+11. acknowledged_at
+
+Command Source:
+
+1. SENSOR_STATE
+2. MANUAL_OVERRIDE
+3. SYSTEM_RECOVERY
+
+Stale Command Prevention:
+
+1. প্রতিটি Command-এ state_version থাকবে
+2. Zone Node পুরোনো Version Apply করবে না
+3. Backend একই State-এর Duplicate Command Generate করবে না
+
+Critical Transition থেকে Command Response পর্যন্ত Target:
+
+Backend Processing < 500 ms
+
+End-to-end Actuation Target:
+
+প্রায় 1 second-এর মধ্যে
+
+==================================================
+20. MANUAL OVERRIDE CONFLICT HANDLING
+==================================================
+
+Admin Manual Override এবং Real Sensor Trigger একই সময়ে ঘটতে পারে।
+
+Rules:
+
+1. দুই Action একই Zone State Service দিয়ে Process হবে
+2. Zone State Row Database Lock করতে হবে
+3. Double Incident Create করা যাবে না
+4. Double Actuator Command Create করা যাবে না
+5. Sensor Reading অবশ্যই Log হবে
+6. Manual Override অবশ্যই Audit হবে
+7. Timeline-এ Cause স্পষ্ট থাকবে
+
+Recommended Conflict Rule:
+
+1. Active Manual Override-এর Command Actuation-এর ওপর Priority পাবে
+2. Sensor Reading Risk Score Calculate এবং Log হবে
+3. Sensor Trigger Suppress করা হবে না
+4. Sensor Trigger থেকে Duplicate Physical Command যাবে না
+5. Override শেষ হলে Latest Valid Sensor State Recalculate হবে
+
+Manual Override Fields:
+
+1. Zone
+2. Action
+3. Admin
+4. Reason
+5. Started At
+6. Expires At
+7. Status
+8. Cleared At
+
+==================================================
+21. ACKNOWLEDGMENT RACE CONDITION
+==================================================
+
+Endpoint:
+
+POST /api/v1/incidents/{incident_id}/acknowledge
+
+দুই Staff একই সময়ে Acknowledge করলে Exactly একজন Success পাবে।
+
+MongoDB Atomic Transaction Pattern:
+
+1. Client Session শুরু
+2. withTransaction ব্যবহার
+3. Incident Atomic Filter দিয়ে Update
+4. Acknowledgment Insert
+5. Incident Event Insert
+6. Commit-এর পরে WebSocket Broadcast
+
+Atomic Update Filter:
+
+{
+  id: incidentId,
+  active: true,
+  status: "OPEN",
+  acknowledgedAt: null
+}
+
+Atomic Update:
+
+{
+  $set: {
+    status: "ACKNOWLEDGED",
+    acknowledgedBy: userId,
+    acknowledgedAt: now,
+    updatedAt: now
+  },
+  $inc: {
+    version: 1
+  }
+}
+
+Options:
+
+{
+  returnDocument: "after",
+  session
+}
+
+Result পাওয়া গেলে:
+
+1. Success
+2. acknowledgments Collection-এ Insert
+3. INCIDENT_ACKNOWLEDGED Event
+4. Transaction Commit
+5. WebSocket Broadcast
+
+Result না পাওয়া গেলে:
+
+1. Incident Exists কি না Check
+2. না থাকলে 404
+3. Already Acknowledged হলে 409 Conflict
+4. Resolved হলে 409 Conflict
+5. Existing Acknowledgment Detail Return
+
+Required Index:
+
+acknowledgments:
+{ incidentId: 1 }, unique: true
+
+Race Safety:
+
+1. Atomic Filter
+2. Unique Index
+3. Transaction
+4. Transient Transaction Retry
+5. Duplicate WebSocket Broadcast Prevention
+==================================================
+22. BACKEND API ENDPOINTS
+==================================================
+
+CORE AUTHENTICATION:
+
+POST /api/v1/auth/login
+POST /api/v1/auth/logout
+GET /api/v1/auth/me
+
+CORE ZONE INGESTION:
+
+POST /api/v1/readings
+POST /api/v1/zones/{zone_code}/heartbeat
+GET /api/v1/zones/{zone_code}/commands/latest
+POST /api/v1/zones/{zone_code}/commands/{command_id}/acknowledge
+
+CORE DASHBOARD:
+
+GET /api/v1/dashboard/snapshot
+GET /api/v1/zones/status
+GET /api/v1/zones/{zone_id}
+GET /api/v1/priority-queue
+
+CORE INCIDENTS:
+
+GET /api/v1/incidents?from=&to=&zone=&hazard=&status=
+GET /api/v1/incidents/{incident_id}
+GET /api/v1/incidents/{incident_id}/timeline
+POST /api/v1/incidents/{incident_id}/acknowledge
+
+CORE ADMIN:
+
+POST /api/v1/admin/zones/{zone_id}/override
+DELETE /api/v1/admin/zones/{zone_id}/override
+GET /api/v1/admin/system-health
+GET /api/v1/admin/raw-readings
+
+CORE SYSTEM:
+
+GET /health
+GET /ready
+GET /api/v1/system/version
+
+WEBSOCKET:
+
+WS /ws/dashboard
+
+BONUS:
+
+GET /api/v1/zones/{zone_id}/trend
+GET /api/v1/zones/{zone_id}/prediction
+POST /api/v1/reports/natural-language
+
+USEFUL BUT DEFER UNTIL CORE COMPLETE:
+
+GET /api/v1/zones/{zone_id}/readings
+GET /api/v1/reports/export.csv
+POST /api/v1/admin/zones
+PATCH /api/v1/admin/zones/{zone_id}
+POST /api/v1/admin/zones/{zone_id}/rotate-api-key
+GET /api/v1/admin/users
+POST /api/v1/admin/users
+PATCH /api/v1/admin/users/{user_id}
+
+API RULES:
+
+1. Route Handler শুধু parsing/auth/response করবে
+2. Business Logic Service Layer-এ থাকবে
+3. Request/Response Zod Schema থাকবে
+4. Error format consistent হবে
+5. OpenAPI document actual implementation-এর সাথে match করবে
+6. Date-range filter Test Case 8 অনুযায়ী mandatory
+7. Nonexistent Incident acknowledge করলে 404
+8. Unauthorized dashboard call 401
+9. Forbidden role call 403
+10. Race/duplicate conflict 409
+==================================================
+23. API DOCUMENTATION REQUIREMENTS
+==================================================
+
+প্রতিটি Endpoint-এর জন্য দিতে হবে:
+
+1. Method
+2. Path
+3. Purpose
+4. Authentication
+5. Required Role
+6. Request Headers
+7. Request Body
+8. Success Response
+9. Validation Error
+10. Unauthorized Error
+11. Forbidden Error
+12. Not Found Error
+13. Conflict Error
+
+বিশেষভাবে Document করতে হবে:
+
+1. Sensor Reading Payload
+2. Current Zone Status
+3. Date-range Incident Filter
+4. Invalid Incident Acknowledgment
+5. Manual Override
+6. WebSocket Events
+7. Natural-Language Validation
+
+Backend OpenAPI Documentation Generate করবে।
+
+কিন্তু Final PDF-এর জন্য Human-readable API Table আলাদাভাবে দিতে হবে।
+
+==================================================
+24. DATABASE SCHEMA
+==================================================
+
+MongoDB ব্যবহার করা হলেও PDF-এর Schema Design marks পাওয়ার জন্য Collections, Reference Fields, Cardinality, Validators এবং Indexes স্পষ্টভাবে Document করতে হবে।
+
+ID POLICY:
+
+1. Public Entity ID = UUID String
+2. Reading/Event High-volume ID = UUID অথবা Mongo ObjectId
+3. All timestamps = BSON Date in UTC
+4. All enum fields = JSON Schema enum
+5. All numeric sensor fields = minimum/maximum validator
+
+COLLECTION: zones
+
+Fields:
+
+1. id: string UUID, unique
+2. code: string, unique
+3. name: string
+4. description: string
+5. hazardProfile: object
+6. apiKeyHash: string
+7. isActive: boolean
+8. configurationStatus: ACTIVE | INACTIVE | NOT_CONFIGURED
+9. sampleIntervalMs: integer
+10. offlineTimeoutSeconds: integer
+11. createdAt: date
+12. updatedAt: date
+13. archivedAt: date | null
+
+COLLECTION: sensors
+
+Fields:
+
+1. id: string UUID
+2. zoneId: string UUID reference -> zones.id
+3. sensorType: FIRE | GAS | WATER | PIR | CAMERA
+4. hardwareReference: string
+5. rawMin: number
+6. rawMax: number
+7. baselineRaw: number
+8. criticalRaw: number
+9. direction: ASCENDING | DESCENDING
+10. warmupSeconds: integer
+11. debounceCount: integer
+12. isRequired: boolean
+13. isEnabled: boolean
+14. status: ONLINE | OFFLINE | DEGRADED | WARMING_UP | NOT_CONFIGURED
+15. lastSeenAt: date | null
+16. createdAt: date
+17. updatedAt: date
+
+COLLECTION: readings
+
+Fields:
+
+1. id
+2. zoneId reference -> zones.id
+3. bootId
+4. sequence
+5. observedAt
+6. receivedAt
+7. uptimeMs
+8. sampleIntervalMs
+9. fireRaw
+10. gasRaw
+11. waterRaw
+12. pirOccupied
+13. cameraOccupied
+14. sensorStatus object
+15. fireFactor
+16. gasFactor
+17. waterFactor
+18. occupancyFactor
+19. riskScore
+20. calculatedState
+21. primaryHazard
+22. isLate
+23. source
+24. rawPayload
+25. createdAt
+
+Required Unique Index:
+
+{ zoneId: 1, bootId: 1, sequence: 1 }, unique
+
+COLLECTION: zone_states
+
+Fields:
+
+1. zoneId, unique reference -> zones.id
+2. safetyState
+3. connectivityState
+4. riskScore
+5. riskComponents object
+6. primaryHazard
+7. occupied
+8. lastReadingId
+9. lastObservedAt
+10. lastReceivedAt
+11. warningSince
+12. criticalSince
+13. firePositiveCount
+14. fireClearCount
+15. fireConfirmed
+16. stateVersion
+17. updatedAt
+
+COLLECTION: incidents
+
+Fields:
+
+1. id
+2. zoneId reference -> zones.id
+3. status: OPEN | ACKNOWLEDGED | RESOLVED
+4. active: boolean
+5. severity: CRITICAL
+6. primaryHazard
+7. initialRiskScore
+8. peakRiskScore
+9. startedAt
+10. acknowledgedAt
+11. acknowledgedBy reference -> users.id
+12. resolvedAt
+13. resolutionReason
+14. version
+15. createdAt
+16. updatedAt
+
+COLLECTION: incident_events
+
+Fields:
+
+1. id
+2. incidentId reference -> incidents.id | null
+3. zoneId reference -> zones.id
+4. eventType
+5. eventSource
+6. actorUserId reference -> users.id | null
+7. description
+8. metadata object
+9. occurredAt
+
+COLLECTION: acknowledgments
+
+Fields:
+
+1. id
+2. incidentId unique reference -> incidents.id
+3. userId reference -> users.id
+4. acknowledgedAt
+5. note
+
+COLLECTION: actuator_commands
+
+Fields:
+
+1. id
+2. zoneId reference -> zones.id
+3. incidentId reference -> incidents.id | null
+4. stateVersion
+5. safetyState
+6. ledState
+7. buzzer
+8. relayCutoff
+9. commandSource
+10. createdAt
+11. acknowledgedAt
+12. appliedAt
+
+Required Unique Index:
+
+{ zoneId: 1, stateVersion: 1 }, unique
+
+COLLECTION: users
+
+Fields:
+
+1. id
+2. name
+3. email, unique
+4. passwordHash
+5. isActive
+6. createdAt
+7. updatedAt
+8. lastLoginAt
+
+COLLECTION: sessions
+
+Fields:
+
+1. id
+2. userId reference -> users.id
+3. tokenHash, unique
+4. expiresAt
+5. createdAt
+6. lastSeenAt
+7. revokedAt
+8. ipAddress
+9. userAgent
+
+TTL Index:
+
+{ expiresAt: 1 }, expireAfterSeconds: 0
+
+COLLECTION: roles
+
+Fields:
+
+1. id
+2. code: ADMIN | SECURITY_STAFF, unique
+3. name
+
+COLLECTION: user_roles
+
+Fields:
+
+1. id
+2. userId reference -> users.id
+3. roleId reference -> roles.id
+4. createdAt
+
+Required Unique Index:
+
+{ userId: 1, roleId: 1 }, unique
+
+COLLECTION: manual_overrides
+
+Fields:
+
+1. id
+2. zoneId reference -> zones.id
+3. userId reference -> users.id
+4. action
+5. reason
+6. startedAt
+7. expiresAt
+8. clearedAt
+9. status
+10. active
+
+COLLECTION: predictions
+
+Fields:
+
+1. id
+2. zoneId reference -> zones.id
+3. source: TRAINED_MODEL | GEMINI_ADVISORY | OPENROUTER_ADVISORY
+4. modelVersion
+5. probability
+6. horizonMinutes
+7. featureSnapshot
+8. explanation
+9. predictedAt
+
+COLLECTION: natural_language_reports
+
+Fields:
+
+1. id
+2. userId reference -> users.id
+3. rawText
+4. provider
+5. model
+6. parsedZoneId reference -> zones.id | null
+7. parsedHazard
+8. estimatedSeverity
+9. modelResponse
+10. validationStatus
+11. validationErrors
+12. appliedToPriority
+13. createdAt
+
+COLLECTION: audit_logs
+
+Fields:
+
+1. id
+2. userId reference -> users.id | null
+3. zoneId reference -> zones.id | null
+4. action
+5. entityType
+6. entityId
+7. beforeData
+8. afterData
+9. ipAddress
+10. createdAt
+
+COLLECTION: schema_migrations
+
+Fields:
+
+1. version, unique
+2. name
+3. checksum
+4. appliedAt
+
+DOCUMENTATION REQUIREMENT:
+
+1. Actual ERD-style diagram তৈরি করতে হবে
+2. Arrow দিয়ে references দেখাতে হবে
+3. Collection validators appendix-এ দিতে হবে
+4. Index table দিতে হবে
+5. MongoDB-তে Foreign Key নেই—এটি লুকানো যাবে না
+6. Integrity কীভাবে enforce হচ্ছে তা test evidence দিয়ে দেখাতে হবে
+==================================================
+25. DATABASE RELATIONSHIPS AND INTEGRITY
+==================================================
+
+Required Logical Relationships:
+
+1. Zones → Sensors
+2. Zones → Readings
+3. Zones → Zone State
+4. Zones → Incidents
+5. Zones → Commands
+6. Incidents → Incident Events
+7. Incidents → Acknowledgments
+8. Users → Acknowledgments
+9. Users ↔ Roles through user_roles
+10. Users → Manual Overrides
+11. Zones → Manual Overrides
+12. Zones → Predictions
+13. Users → Natural-Language Reports
+14. Users → Sessions
+
+MongoDB Integrity Strategy:
+
+1. JSON Schema Validator field types/enums enforce করবে
+2. Unique Index duplicate entity prevent করবে
+3. Partial Unique Index one-active-incident rule enforce করবে
+4. Multi-document Transaction related writes atomic করবে
+5. Repository create/update-এর আগে referenced ID existence check করবে
+6. Zone archive operation active incident check করবে
+7. Hard delete endpoint থাকবে না
+8. Orphan-check test/script থাকবে
+9. All critical writes majority write concern ব্যবহার করবে
+10. Transaction failure হলে no partial incident/ack/command state থাকবে
+
+Integrity Rules:
+
+1. Open/acknowledged Incident থাকা Zone Archive করা যাবে না
+2. Zone Hard Delete করা যাবে না
+3. Reading-এর zoneId অবশ্যই Exist করবে
+4. Incident-এর zoneId অবশ্যই Exist করবে
+5. Acknowledgment-এর incidentId এবং userId অবশ্যই Exist করবে
+6. Command-এর zoneId অবশ্যই Exist করবে
+7. User Role ছাড়া Protected Action করা যাবে না
+8. Zone API Key Plain Text Database-এ রাখা যাবে না
+9. Incident resolve হলে active = false একই Transaction-এ হবে
+10. Manual Override clear হলে Latest Sensor State Recalculate হবে
+
+Required Evidence:
+
+1. Invalid zoneId reading rejected
+2. Active incident zone archive rejected
+3. Duplicate acknowledgment rejected
+4. Duplicate reading rejected
+5. One active incident per zone index test
+6. Transaction rollback test
+7. Orphan integrity test returns zero orphan documents
+
+IMPORTANT:
+
+MongoDB-এর Cross-collection Foreign Key Database নিজে enforce করে না। তাই এই Application-level Integrity + Test Evidence না থাকলে Test Case 17-18-এ marks risk থাকবে।
+==================================================
+26. DATABASE INDEXES
+==================================================
+
+Required Indexes:
+
+1. zones:
+   { code: 1 }, unique
+
+2. sensors:
+   { zoneId: 1, sensorType: 1 }, unique
+
+3. readings:
+   { zoneId: 1, bootId: 1, sequence: 1 }, unique
+
+4. readings:
+   { zoneId: 1, observedAt: -1 }
+
+5. readings:
+   { receivedAt: 1 }, TTL only if retention automation enabled
+
+6. zone_states:
+   { zoneId: 1 }, unique
+
+7. zone_states:
+   { connectivityState: 1 }
+
+8. incidents:
+   { severity: 1, startedAt: -1 }
+
+9. incidents:
+   { zoneId: 1, startedAt: -1 }
+
+10. incidents:
+    { zoneId: 1, active: 1 },
+    unique with partialFilterExpression { active: true }
+
+11. incident_events:
+    { incidentId: 1, occurredAt: 1 }
+
+12. acknowledgments:
+    { incidentId: 1 }, unique
+
+13. actuator_commands:
+    { zoneId: 1, stateVersion: 1 }, unique
+
+14. predictions:
+    { zoneId: 1, predictedAt: -1 }
+
+15. audit_logs:
+    { createdAt: -1 }
+
+16. sessions:
+    { tokenHash: 1 }, unique
+
+17. sessions:
+    { expiresAt: 1 }, TTL
+
+Critical Query:
+
+“All CRITICAL incidents in the last 24 hours across all zones”
+
+Mongo Query Shape:
+
+{
+  severity: "CRITICAL",
+  startedAt: { $gte: last24Hours }
+}
+
+Sort:
+
+{ startedAt: -1 }
+
+Expected Winning Index:
+
+{ severity: 1, startedAt: -1 }
+
+Performance Evidence:
+
+1. At least 10,000+ Reading Documents Seed
+2. Sufficient Incident Documents Seed
+3. explain("executionStats") Output Save
+4. totalDocsExamined Record
+5. totalKeysExamined Record
+6. executionTimeMillis Record
+7. Index usage Screenshot/JSON Evidence
+==================================================
+27. CONCURRENT DATABASE WRITE HANDLING
+==================================================
+
+Test:
+
+10টি Simultaneous Sensor Write across different zones.
+
+Expected:
+
+1. কোনো Reading হারাবে না
+2. Duplicate হবে না
+3. Transaction Corrupt হবে না
+4. Zone State সঠিক থাকবে
+5. Incident Count সঠিক থাকবে
+6. WebSocket Events committed state-এর সাথে match করবে
+
+Implementation:
+
+1. MongoDB Replica Set
+2. Client Session
+3. withTransaction
+4. Majority Write Concern
+5. Unique Compound Index
+6. Atomic findOneAndUpdate
+7. stateVersion-based Optimistic Concurrency
+8. TransientTransactionError bounded retry
+9. UnknownTransactionCommitResult retry
+10. WebSocket Broadcast only after successful commit
+
+Zone State Update Pattern:
+
+1. Current zone_state read inside Transaction
+2. Incoming observedAt late কি না check
+3. Risk calculate
+4. Expected stateVersion দিয়ে update filter
+5. Match না হলে transaction retry
+6. Incident/command/event same transaction-এ write
+7. Commit হলে publish
+
+Example CAS Filter:
+
+{
+  zoneId,
+  stateVersion: expectedVersion
+}
+
+Update:
+
+{
+  $set: { ...nextState },
+  $inc: { stateVersion: 1 }
+}
+
+MongoDB-তে SQL Row-level Lock ব্যবহার করা হবে না।
+
+Correctness আসবে:
+
+1. Document atomicity
+2. Transaction isolation
+3. Unique indexes
+4. Optimistic concurrency
+5. Retry logic
+
+Local Test Environment-এ Replica Set enabled না থাকলে এই Test valid হবে না।
+==================================================
+28. AUTHENTICATION
+==================================================
+
+Dashboard User Authentication:
+
+1. Secure Login
+2. Password Hash with Argon2id অথবা bcrypt
+3. Random Session Token
+4. Session Token-এর Hash sessions Collection-এ Store
+5. HttpOnly Cookie
+6. Secure Cookie in HTTPS
+7. SameSite=Lax অথবা Strict
+8. Session Expiration
+9. Logout = Session revoke
+10. Current User Endpoint
+11. Disabled User Block
+12. Invalid Credential Handling
+13. Login Rate Limit
+14. CSRF Protection for state-changing browser requests
+
+Zone Authentication:
+
+1. প্রতিটি Zone-এর আলাদা API Key
+2. X-Zone-Code এবং X-Zone-API-Key Header
+3. API Key Hash/HMAC Database-এ থাকবে
+4. Constant-time comparison
+5. Unknown Zone Reject
+6. Wrong API Key Reject
+7. Inactive Zone Reject
+8. API Key Rotate করা যাবে
+
+Never:
+
+1. API Key GitHub-এ Commit করা
+2. Password Plain Text Store করা
+3. Session Token URL Query-তে পাঠানো
+4. Frontend Public Environment Variable-এ Zone Secret রাখা
+5. Raw Session Token Database-এ রাখা
+6. WebSocket auth ছাড়াই snapshot দেওয়া
+==================================================
+29. ROLE-BASED ACCESS CONTROL
+==================================================
+
+SECURITY_STAFF Core Permissions:
+
+1. Dashboard View
+2. Zone Status View
+3. Priority Queue View
+4. Active Incident View
+5. Incident History View
+6. Incident Timeline View
+7. Acknowledge Incident
+8. Summary Report View
+
+ADMIN Core Permissions:
+
+1. Staff-এর সব Permissions
+2. Manual Override
+3. Override Clear
+4. System Health
+5. Raw Sensor Reading
+6. Calibration/Zone Configuration View
+
+OPTIONAL AFTER CORE:
+
+1. User Management UI
+2. Zone CRUD UI
+3. API Key Rotation UI
+4. Risk Setting UI
+5. Database Diagnostic UI
+
+Enforcement:
+
+1. Server-side role guard প্রতিটি Protected Route Handler-এ থাকবে
+2. Service-level authorization Critical Action-এর আগে থাকবে
+3. Frontend Menu Hide secondary control
+4. Direct API Call করলেও unauthorized user block হবে
+5. WebSocket connection-এর role resolve হবে
+6. Admin-only WebSocket event payload staff-এর কাছে leak করা যাবে না
+
+HTTP Responses:
+
+401:
+Not Authenticated
+
+403:
+Authenticated but Not Authorized
+==================================================
+30. SECURITY HARDENING
+==================================================
+
+Implement করতে হবে:
+
+1. Zod Request Validation
+2. MongoDB JSON Schema Validation
+3. NoSQL Operator Injection Prevention
+4. User-supplied object সরাসরি Mongo Filter হিসেবে ব্যবহার না করা
+5. Password Hashing
+6. Zone API Key Hashing/HMAC
+7. CORS Allowlist
+8. CSRF Protection
+9. Rate Limiting
+10. Request Size Limit
+11. Secure Environment Variables
+12. Sensitive Log Redaction
+13. Audit Logging
+14. Role Validation
+15. HTTPS/WSS Deployment
+16. Session Expiration and Revocation
+17. Output Encoding
+18. Error Message-এ Secret Leak Prevent
+19. WebSocket Origin/Auth Check
+20. AI Prompt/Input Length Limit
+21. AI Structured Output Schema
+22. AI Deterministic Validation Gate
+23. Gemini/OpenRouter timeout and retry cap
+24. AI response কখনো command/state API-তে সরাসরি pass না করা
+
+NoSQL Injection Examples Block করতে হবে:
+
+1. email = { "$ne": null }
+2. zoneId = { "$gt": "" }
+3. Raw JSON filter object
+4. Prototype pollution keys
+5. Unexpected nested operators
+
+Rate Limits:
+
+1. Login Endpoint
+2. Natural-Language Report
+3. Admin Override
+4. Zone Ingestion per Zone
+5. WebSocket reconnect storm
+
+Zone Normal Reading Rate যেন Rate Limit-এর কারণে Block না হয়।
+
+Use per-zone expected interval-aware allowance।
+==================================================
+31. REAL-TIME WEBSOCKET SYSTEM
+==================================================
+
+Endpoint:
+
+WS /ws/dashboard
+
+Client Connect হলে Backend পাঠাবে:
+
+1. Current Zone Snapshot
+2. Active Incidents
+3. Priority Queue
+4. System Health
+5. Current Server Time
+
+WebSocket Event Format:
+
+{
+  "event_id": "uuid",
+  "event_type": "ZONE_STATE_CHANGED",
+  "occurred_at": "2026-07-25T08:20:45Z",
+  "data": {},
+  "version": 42
+}
+
+Required Event Types:
+
+1. SNAPSHOT
+2. ZONE_READING_UPDATED
+3. ZONE_STATE_CHANGED
+4. ZONE_CONNECTIVITY_CHANGED
+5. INCIDENT_CREATED
+6. INCIDENT_ACKNOWLEDGED
+7. INCIDENT_RESOLVED
+8. PRIORITY_QUEUE_UPDATED
+9. ACTUATOR_COMMAND_UPDATED
+10. SYSTEM_HEALTH_UPDATED
+11. TREND_UPDATED
+12. PREDICTION_UPDATED
+13. NOTIFICATION_CREATED
+
+Three Zones 1 second-এর মধ্যে State Change করলে:
+
+1. কোনো Event Drop হবে না
+2. প্রতিটি Event আলাদা থাকবে
+3. Priority Queue Final State সঠিক থাকবে
+
+==================================================
+32. BROWSER RECONNECT HANDLING
+==================================================
+
+Browser Disconnect এবং Reconnect হলে:
+
+1. Frontend Reconnecting দেখাবে
+2. Exponential Backoff ব্যবহার করবে
+3. Reconnect-এর পরে Full Dashboard Snapshot Fetch করবে
+4. পুরোনো Local State Replace করবে
+5. Stale Alert দেখাবে না
+6. Current Incident Status সঠিক দেখাবে
+7. Priority Queue Rebuild হবে
+
+Simple Reliable Strategy:
+
+1. REST দিয়ে Full Snapshot
+2. তারপর WebSocket Subscribe
+
+এই Strategy Event Replay-এর চেয়ে Hackathon-এর জন্য সহজ ও Reliable।
+
+==================================================
+33. ZONE OFFLINE DETECTION
+==================================================
+
+Background Task প্রতি 1 second অথবা 2 seconds পর Zone Last Seen Check করবে।
+
+Recommended Offline Rule:
+
+offline_timeout =
+max(
+  configured offline timeout,
+  sample interval × 3
+)
+
+Reading না এলে:
+
+1. Connectivity = OFFLINE
+2. SENSOR_OFFLINE Event
+3. Dashboard Update
+4. Notification
+5. Last Known Safety State Preserve
+6. Open Incident Resolve নয়
+
+Reading ফিরে এলে:
+
+1. Connectivity = ONLINE
+2. ZONE_RECONNECTED Event
+3. Current Snapshot Recalculate
+4. Cached Reading Sync Status
+5. Dashboard Update
+
+==================================================
+34. LOCAL CACHE RESYNC SUPPORT
+==================================================
+
+Hardware Node Network হারালে Reading Cache করতে পারে।
+
+Backend Cached Reading গ্রহণ করবে।
+
+Rules:
+
+1. Sequence অনুযায়ী Deduplicate
+2. Observed Time Preserve
+3. পুরোনো Cached Reading Historical Data হিসেবে Save
+4. Old Reading Current State Change করবে না
+5. Newest Valid Reading Current State Update করবে
+6. Sync Summary Return করবে
+
+Example Response:
+
+{
+  "received": 20,
+  "accepted": 18,
+  "duplicates": 1,
+  "late": 1,
+  "current_state_updated": true
+}
+
+==================================================
+35. BACKEND RESTART RECOVERY
+==================================================
+
+Incident চলাকালে Backend Restart Test করতে হবে।
+
+Startup Flow:
+
+1. Database Connection Check
+2. Active Zone Load
+3. Current Zone State Load
+4. Latest Reading Load
+5. Open Incident Load
+6. Acknowledged Incident Load
+7. Latest Actuator Command Load
+8. Priority Queue Rebuild
+9. Background Tasks Start
+10. Backend Restart Event Log
+
+Backend Restart-এর পরে:
+
+1. সব Zone SAFE ধরে নেওয়া যাবে না
+2. Open Incident হারানো যাবে না
+3. Acknowledgment হারানো যাবে না
+4. Priority Queue পুনরায় তৈরি হবে
+5. Dashboard Current State পাবে
+
+Current State Database Collection ব্যবহার করলেও Startup-এ Database থেকে Load করার Evidence দেখাতে হবে।
+
+==================================================
+36. BACKUP AND RECOVERY
+==================================================
+
+Backup Strategy:
+
+1. Daily mongodump
+2. --archive এবং --gzip
+3. Separate Storage Location
+4. Timestamped Backup File
+5. Backup Retention
+6. Restore Script
+7. Demo-এর আগে Manual Backup
+8. Backup Verification
+
+Example File:
+
+backup_2026-07-25_0000.archive.gz
+
+Required Scripts:
+
+1. scripts/backup-mongodb.sh
+2. scripts/restore-mongodb.sh
+
+Backup Command Pattern:
+
+mongodump \
+  --uri="$MONGODB_URI" \
+  --db="$MONGODB_DB" \
+  --archive="$BACKUP_FILE" \
+  --gzip
+
+Restore Command Pattern:
+
+mongorestore \
+  --uri="$MONGODB_URI" \
+  --archive="$BACKUP_FILE" \
+  --gzip \
+  --drop
+
+Documentation-এ লিখতে হবে:
+
+1. Backup কত ঘনঘন হয়
+2. কোথায় রাখা হয়
+3. Encryption/access control
+4. Database হারালে Restore কীভাবে হবে
+5. Last Backup এবং Failure-এর মাঝের Data হারাতে পারে
+6. Recovery Point Objective
+7. Recovery Time Estimate
+8. Restore-এর পরে indexes/validators verify কীভাবে হবে
+
+Hackathon-level Policy:
+
+1. Daily Full Backup
+2. Last 7 Daily Backup রাখা
+3. Demo-এর আগে Manual Backup
+4. At least one restore rehearsal
+5. Restore evidence screenshot/log
+==================================================
+37. DATA RETENTION POLICY
+==================================================
+
+Recommended Policy:
+
+RAW READINGS:
+1. 90 days রাখা
+2. 90 দিনের পরে Daily Summary তৈরি
+3. Raw Documents Archive/Delete
+
+INCIDENTS:
+1. Minimum 1 year রাখা
+
+AUDIT LOGS:
+1. Minimum 1 year রাখা
+
+PREDICTIONS:
+1. 90 days অথবা Incident Validation-এর প্রয়োজন অনুযায়ী রাখা
+
+ACCESS:
+
+SECURITY STAFF:
+1. Incident Summary
+2. Incident Timeline
+3. Zone Current State
+
+ADMIN:
+1. Raw Historical Readings
+2. Audit Logs
+3. System Health
+4. Calibration Data
+
+==================================================
+38. FRONTEND IMPLEMENTATION RESPONSIBILITY
+==================================================
+
+Designer Figma তৈরি করবে।
+
+Developer Figma অনুযায়ী Functional Frontend Implement করবে।
+
+Required Pages:
+
+1. Login
+2. Security Staff Dashboard
+3. Admin Dashboard
+4. Live Monitoring
+5. Campus Map
+6. Zone Details
+7. Priority Queue
+8. Active Alerts
+9. Incident History
+10. Incident Details
+11. Incident Timeline
+12. Notification Center
+13. System Health
+14. Manual Override
+15. Analytics
+16. Reports
+17. Settings
+18. User Management
+19. Bonus Features
+20. Permission Denied
+
+Frontend Functional Requirements:
+
+1. Real API Data
+2. WebSocket Live Update
+3. Loading State
+4. Error State
+5. Empty State
+6. Offline State
+7. Reconnecting State
+8. Role-based Route Guard
+9. Token/Session Handling
+10. Logout
+11. Date Filter
+12. Zone Filter
+13. Hazard Filter
+14. Incident Search
+15. Alert Acknowledgment
+16. Admin Override
+17. Live Priority Queue
+18. Ranking Explanation
+19. Incident Timeline
+20. Mixed State Readability
+
+Frontend কখনো Fake Risk Score Calculate করবে না।
+
+==================================================
+39. FRONTEND DATA MANAGEMENT
+==================================================
+
+Frontend State Categories:
+
+SERVER STATE:
+1. Zones
+2. Incidents
+3. Priority Queue
+4. System Health
+5. Predictions
+6. Reports
+
+AUTH STATE:
+1. User
+2. Role
+3. Session
+
+REAL-TIME STATE:
+1. WebSocket Status
+2. Latest Events
+3. Notifications
+4. Connection Status
+
+UI STATE:
+1. Modal
+2. Filters
+3. Selected Zone
+4. Sidebar
+5. Toast
+
+Rules:
+
+1. WebSocket Event পেলে Relevant Cache Update করবে
+2. Snapshot পেলে Stale State Replace করবে
+3. Duplicate WebSocket Event event_id দিয়ে Ignore করবে
+4. Browser Refresh করলে REST Snapshot Load করবে
+5. Server Error হলে পুরোনো Data-কে Live হিসেবে দেখাবে না
+
+==================================================
+40. NOTIFICATION AND ALERT UX IMPLEMENTATION
+==================================================
+
+CRITICAL হলে:
+
+1. Toast
+2. Alert Banner
+3. Short Audio Cue
+4. Priority Queue Update
+5. Zone Card Highlight
+6. Active Alert Entry
+
+Multiple Alert:
+
+1. Stack হবে
+2. প্রতিটি Visible হবে
+3. একে অন্যকে Replace করবে না
+4. Highest Priority Alert উপরে থাকবে
+
+Acknowledged হলে:
+
+1. Active Sound বন্ধ
+2. Pulse বন্ধ
+3. Acknowledged Badge
+4. Acknowledged User
+5. Acknowledged Time
+
+Resolved হলে:
+
+1. Active Alert থেকে Remove
+2. Incident History-তে থাকবে
+3. Resolution Notification দেখাবে
+
+Browser Audio Permission না থাকলে Visual Alert অবশ্যই থাকবে।
+
+==================================================
+41. INCIDENT HISTORY AND TIMELINE
+==================================================
+
+Incident History API Filters:
+
+1. from date
+2. to date
+3. zone
+4. hazard
+5. status
+6. acknowledged_by
+7. page
+8. page_size
+9. sort
+
+Incident Details Return করবে:
+
+1. Summary
+2. Maximum Risk
+3. Initial Sensor Values
+4. Peak Sensor Values
+5. Occupancy
+6. Ranking Information
+7. Acknowledgment
+8. Resolution
+9. Actuator Commands
+10. Full Timeline
+
+Duration:
+
+Resolved হলে:
+resolved_at - started_at
+
+Active হলে:
+current_time - started_at
+
+==================================================
+42. SYSTEM HEALTH
+==================================================
+
+System Health API Return করবে:
+
+1. Backend Status
+2. Database Status
+3. WebSocket Status
+4. Active WebSocket Connections
+5. Total Active Zones
+6. Online Zones
+7. Offline Zones
+8. Last Database Check
+9. Average API Response Time
+10. Recent Failed Request Count
+11. Backend Start Time
+12. Backend Version
+13. Last Successful Reading Time
+14. Background Task Status
+
+Optional:
+
+1. CPU
+2. Memory
+3. Disk
+4. Network Latency
+
+Fake System Metric Return করা যাবে না।
+
+==================================================
+43. REPORTS AND ANALYTICS
+==================================================
+
+Core Reports:
+
+1. Critical Incidents Last 24 Hours
+2. Incidents Per Zone
+3. Hazard Distribution
+4. Average Response Time
+5. Offline Sensors
+6. Incident Duration
+7. Zone Risk Trend
+
+Report Filters:
+
+1. Date Range
+2. Zone
+3. Hazard
+4. Incident Status
+
+At least CSV Export Implement করা যেতে পারে।
+
+PDF Export Secondary Priority।
+
+Analytics Query Efficient হতে হবে।
+
+==================================================
+44. BONUS 1 — CAMERA OCCUPANCY CROSS-CHECK
+==================================================
+
+Backend PIR এবং Camera Occupancy আলাদাভাবে গ্রহণ করবে।
+
+Combined Occupancy Rule:
+
+1. PIR true, Camera true
+   → Occupied
+
+2. PIR false, Camera true
+   → Occupied
+
+3. PIR true, Camera false
+   → Occupied
+
+4. Both false
+   → Empty
+
+5. Camera Offline
+   → PIR Result ব্যবহার
+
+6. PIR Offline, Camera Online
+   → Camera Result ব্যবহার
+
+Safety-oriented Rule:
+
+যেকোনো Valid Sensor Occupied বললে Combined Result Occupied হবে।
+
+Store করতে হবে:
+
+1. pir_occupied
+2. camera_occupied
+3. combined_occupied
+4. occupancy_source
+5. disagreement flag
+
+Combined Occupancy:
+
+1. Priority Ranking-এ ব্যবহার হবে
+2. Live Risk-এর Occupancy Component-এ ব্যবহার করা যেতে পারে
+3. Dashboard-এ Explanation থাকবে
+
+==================================================
+45. BONUS 2 — SHORT-TERM RISK TREND
+==================================================
+
+Zone-এর Recent Risk Score ব্যবহার করে Trend Calculate করতে হবে।
+
+Recommended Window:
+
+1. Last 10 readings
+2. অথবা Last 30 seconds
+
+Methods:
+
+1. Linear Slope
+2. Moving Average
+
+Suggested Logic:
+
+1. Minimum 5 Valid Reading প্রয়োজন
+2. Slope > configured threshold
+3. Current State CRITICAL নয়
+4. Current Risk যথেষ্ট Elevated
+
+Trend States:
+
+1. RISING
+2. STABLE
+3. FALLING
+4. TRENDING_TOWARD_CRITICAL
+
+Example:
+
+Risk:
+42 → 46 → 51 → 56 → 61
+
+Result:
+
+TRENDING_TOWARD_CRITICAL
+
+Trend আলাদা Indicator হবে।
+
+Trend নিজে:
+
+1. Incident Create করবে না
+2. Relay চালাবে না
+3. Buzzer চালাবে না
+
+==================================================
+46. BONUS 3 — MACHINE LEARNING RISK PREDICTION
+==================================================
+
+PDF Requirement অনুযায়ী একটি Actual Train করা ML Model থাকতে হবে।
+
+IMPORTANT STACK DECISION:
+
+Gemini 3.5 Flash একটি pre-trained LLM API। শুধু Gemini-কে recent readings দিয়ে probability জিজ্ঞেস করলে Bonus 3-এর “train an actual machine learning model” Requirement পূরণ হবে না।
+
+OFFICIAL PREDICTED RISK:
+
+1. TypeScript Training Script
+2. Logistic Regression
+3. Synthetic/Simulated time-window Dataset
+4. Reproducible random seed
+5. Train/Test Split
+6. Saved coefficients and normalization parameters
+7. Versioned model JSON
+8. Server-side deterministic inference
+
+Prediction Goal:
+
+আগামী 3 মিনিটের মধ্যে Zone CRITICAL হবে কি না তার Probability।
+
+Suggested Features:
+
+1. Current Fire Factor
+2. Current Gas Factor
+3. Current Water Factor
+4. Current Occupancy
+5. Current Risk Score
+6. Gas Slope
+7. Water Slope
+8. Risk Slope
+9. Moving Average Risk
+10. Previous Maximum Risk
+11. Consecutive Warning Count
+12. Zone Hazard Profile Encodings
+
+Target:
+
+willBeCriticalWithin3Minutes
+
+Training Steps:
+
+1. Synthetic Dataset Generate
+2. Scenario labels create
+3. Train/Test Split
+4. Feature Normalize
+5. Logistic Regression Train
+6. Threshold tune
+7. Metrics Calculate
+8. Model Save
+9. Model Version Track
+10. Inference parity test
+
+Required Metrics:
+
+1. Accuracy
+2. Precision
+3. Recall
+4. F1 Score
+5. Confusion Matrix
+6. Test sample count
+7. Positive class ratio
+8. Decision threshold
+
+Official Prediction Output:
+
+{
+  "zone_id": "...",
+  "source": "TRAINED_MODEL",
+  "probability": 0.76,
+  "horizon_minutes": 3,
+  "model_version": "risk-logreg-v1",
+  "predicted_at": "..."
+}
+
+GEMINI 3.5 FLASH ROLE:
+
+Gemini Optional AI Analyst হিসেবে:
+
+1. Official model probability explain করতে পারবে
+2. Recent trend natural language-এ summarize করতে পারবে
+3. Contradictory sensor pattern flag করতে পারবে
+4. Optional advisory probability দিতে পারবে
+
+OpenRouter Fallback:
+
+1. Direct Gemini API timeout/5xx/rate limit হলে OpenRouter call
+2. Model: google/gemini-3.5-flash
+3. Additional model list environment variable থেকে
+4. Strict JSON Schema
+5. Provider/model logged
+6. Fallback failure হলে official trained model unaffected থাকবে
+
+AI Advisory Output আলাদা Field/Panel-এ থাকবে:
+
+{
+  "source": "GEMINI_ADVISORY",
+  "advisory_probability": 0.71,
+  "explanation": "...",
+  "provider": "google",
+  "model": "gemini-3.5-flash"
+}
+
+Safety Rule:
+
+Trained ML Prediction, Gemini Advisory এবং OpenRouter Advisory কখনো নিজে:
+
+1. Incident Create করবে না
+2. Zone CRITICAL করবে না
+3. Buzzer চালাবে না
+4. Relay Cutoff করবে না
+5. LED State পরিবর্তন করবে না
+6. Live Risk Score modify করবে না
+
+Dashboard Labels:
+
+1. LIVE RISK — deterministic sensor fusion
+2. PREDICTED RISK — trained logistic regression
+3. AI ANALYST — Gemini/OpenRouter advisory
+
+এই তিনটি Visual এবং Data Contract-এ স্পষ্টভাবে আলাদা থাকবে।
+==================================================
+47. BONUS 4 — NATURAL-LANGUAGE INCIDENT REPORT
+==================================================
+
+Endpoint:
+
+POST /api/v1/reports/natural-language
+
+Primary Provider:
+
+Google Gemini API
+
+Model:
+
+gemini-3.5-flash
+
+Fallback Provider:
+
+OpenRouter
+
+Primary OpenRouter Model:
+
+google/gemini-3.5-flash
+
+Input:
+
+{
+  "text": "Smell of gas near the IoT Lab bench, not sure how bad."
+}
+
+Strict Structured Output Schema:
+
+{
+  "zone_code": "IOT_LAB",
+  "hazard_type": "GAS",
+  "estimated_severity": 0.6,
+  "confidence": 0.82,
+  "summary": "Possible gas/fume report near IoT Lab bench."
+}
+
+AI Call Policy:
+
+1. First direct Gemini API
+2. Timeout হলে one bounded retry
+3. Retry fail/5xx/429 হলে OpenRouter fallback
+4. OpenRouter models array configured থাকতে পারে
+5. Strict JSON Schema required
+6. Provider, model, latency, fallbackUsed log হবে
+7. Raw hidden reasoning store করা হবে না
+8. Full secret-bearing prompt log করা যাবে না
+
+LLM Output সরাসরি ব্যবহার করা যাবে না।
+
+Deterministic Validation Gate:
+
+1. Parsed Zone Database-এ আছে কি না
+2. Zone Active কি না
+3. Hazard Type Allowed Enum কি না
+4. Severity Number কি না
+5. Severity 0.0-1.0-এর মধ্যে কি না
+6. Confidence Number কি না
+7. Required Fields আছে কি না
+8. User Authenticated কি না
+9. User Role Valid কি না
+10. Input Length Valid কি না
+11. Output has no additional unexpected fields
+12. Report duplicate/spam কি না
+
+Validation Pass হলে:
+
+1. Report Database-এ Save
+2. Dashboard Confirmation
+3. Audit Event
+4. Priority Engine-এ Controlled Human Report Bonus Signal পাঠানো যেতে পারে
+5. Signal capped হবে
+6. Signal expiry থাকবে
+7. Sensor-based Critical Queue order explain করার সময় report reason দেখানো যাবে
+
+Controlled Priority Influence:
+
+human_report_bonus =
+min(5, estimated_severity × confidence × 5)
+
+Rules:
+
+1. শুধু already-CRITICAL zone-এর relative ranking-এ ব্যবহার করা safest
+2. Non-critical zone-কে report alone দিয়ে CRITICAL করা যাবে না
+3. Physical command affect করা যাবে না
+4. Bonus contribution API-তে visible হবে
+5. Expire after configured short window, e.g. 5 minutes
+
+Validation Fail হলে:
+
+1. Ranking Affect করবে না
+2. Actuator Affect করবে না
+3. Clear Error Return
+4. Rejected Report Save
+5. Validation errors store
+6. User confirmation-এ “not applied” দেখাবে
+
+Safety Rule:
+
+Natural-Language Report কখনো একা:
+
+1. Relay
+2. Buzzer
+3. CRITICAL State
+4. Physical Command
+5. Incident auto-open
+6. Live Risk Score
+
+Trigger/modify করতে পারবে না।
+==================================================
+48. TESTING STRATEGY
+==================================================
+
+TEST LEVELS:
+
+1. Unit Tests
+2. Service Tests
+3. Database Tests
+4. API Integration Tests
+5. WebSocket Tests
+6. Frontend Tests
+7. End-to-End Tests
+8. Load Tests
+9. Recovery Tests
+10. Security Tests
+
+UNIT TESTS:
+
+1. Sensor Normalization
+2. Fire Debounce
+3. Gas Warm-up
+4. Risk Formula
+5. State Classification
+6. Hysteresis
+7. Priority Formula
+8. Ranking Reason
+9. Occupancy Fusion
+10. Trend Detection
+11. NLP Validation
+12. ML Safety Gate
+
+DATABASE TESTS:
+
+1. Duplicate Unique Index
+2. Reference Integrity
+3. Delete Restriction
+4. Unique Acknowledgment
+5. One Open Incident per Zone
+6. Late Timestamp Handling
+7. Concurrent Writes
+
+API TESTS:
+
+1. Valid Reading
+2. Invalid Reading
+3. Unknown Zone
+4. Wrong API Key
+5. Duplicate Reading
+6. Current Zone Status
+7. Date Range Filter
+8. Invalid Incident ID
+9. Acknowledge Success
+10. Already Acknowledged
+11. Staff Admin Action Block
+12. Unauthenticated Request Block
+
+==================================================
+49. PDF TEST CASE SOFTWARE COVERAGE
+==================================================
+
+TEST CASE 1 — FIRE:
+
+Software Support:
+
+1. Raw Fire Reading
+2. Backend Debounce
+3. Brief Flicker Ignore
+4. Sustained Flame Confirm
+5. Recovery Window
+6. Correct Risk Contribution
+7. Incident and Command
+
+TEST CASE 2 — GAS:
+
+1. Baseline Normalization
+2. Gradual Risk Increase
+3. Critical Escalation
+4. 30-second Warm-up
+5. No False Trigger
+
+TEST CASE 3 — WATER:
+
+1. Dry Safe
+2. Gradual Increase
+3. Critical Threshold
+4. Correct Reset
+5. Impossible Value Rejection
+
+TEST CASE 4 — OCCUPANCY:
+
+1. Empty/Occupied
+2. Stable State
+3. Flicker Prevention
+4. Sensor Offline
+5. Offline not Empty
+
+TEST CASE 5 — ACTUATION:
+
+1. CRITICAL Command
+2. WARNING No Buzzer/Relay
+3. SAFE Reset
+4. Two Zones Independent
+5. Timestamp Logging
+
+TEST CASE 6 — INGESTION AND RISK FUSION:
+
+1. Backend Risk Calculation
+2. Invalid Payload
+3. Multi-hazard Fusion
+4. Duplicate Reading
+5. Concurrent Ingestion
+
+TEST CASE 7 — ALERT CONFLICT:
+
+1. Multiple State Updates
+2. Acknowledge Race
+3. Flapping Prevention
+4. New Incident after Resolution
+
+TEST CASE 8 — API:
+
+1. All Zone Status
+2. Date Range Incident Filter
+3. Invalid Incident Reject
+4. Documented API
+
+TEST CASE 9 — RESILIENCE:
+
+1. Backend Restart Recovery
+2. Cached Reading Resync
+
+TEST CASE 10 — SECURITY:
+
+1. Unknown Zone Reject
+2. Invalid Session Reject
+
+TEST CASE 11 — SCALE:
+
+1. 30+ Phantom Zones
+2. Load Test
+3. Scaling Explanation
+
+TEST CASE 12 — LIVE DASHBOARD:
+
+1. WebSocket Live Update
+2. Priority Queue
+3. Ranking Explanation
+4. Highest Priority Visibility
+
+TEST CASE 13 — RBAC:
+
+1. Frontend Restriction
+2. Backend Enforcement
+
+TEST CASE 14 — INCIDENT TIMELINE:
+
+1. Searchable History
+2. Filterable History
+3. Complete Timeline
+
+TEST CASE 15 — ALERT UX:
+
+1. Critical Attention
+2. Multiple Alert
+3. Acknowledgment Clearing
+
+TEST CASE 16 — MIXED STATES:
+
+1. SAFE/WARNING/CRITICAL/OFFLINE
+2. Accessibility
+3. Icon + Label
+
+TEST CASE 17 — SCHEMA:
+
+1. Related/Normalized Collections
+2. Explicit Keys
+3. Correct Relationships
+
+TEST CASE 18 — CONCURRENCY:
+
+1. Ten Simultaneous Writes
+2. Zone Delete Protection
+3. Old Timestamp Handling
+
+TEST CASE 19 — QUERY PERFORMANCE:
+
+1. 10,000+ Documents
+2. Last 24 Hours Critical Query
+3. Index Evidence
+
+TEST CASE 20 — BACKUP:
+
+1. Backup Script
+2. Recovery Path
+
+TEST CASE 21 — RETENTION:
+
+1. Retention Policy
+2. Role-based Raw Data Access
+
+TEST CASE 22 — END-TO-END:
+
+1. Two Zones Critical
+2. Risk Calculated
+3. Priority Ranked
+4. Higher Priority Acknowledged
+5. Incidents Logged
+6. Recovery to Idle
+
+TEST CASE 23 — EDGE CASES:
+
+Support সব 6টি:
+
+1. Sensor Disconnect
+2. Three Critical Zones
+3. Override Conflict
+4. Browser Reconnect
+5. Full Restart
+6. Impossible Value
+
+TEST CASE 24 — COMBINED LOAD:
+
+1. Multiple Active Zones
+2. Rapid State Cycling
+3. No Crash
+4. No Freeze
+5. Correct Dashboard
+
+TEST CASE 25 — CONSISTENCY:
+
+1. Backend State
+2. Database State
+3. Frontend State
+4. Actuator Command State
+5. Same Version
+
+TEST CASE 26 — CIRCUIT DIAGRAMS:
+
+Software Developer Support:
+
+1. Hardware Team-এর implemented zone list collect
+2. Pin mapping table verify
+3. API payload field-এর সাথে sensor mapping verify
+4. Command output LED/Buzzer/Relay mapping verify
+5. Documentation-এ প্রতিটি implemented zone-এর diagram include হয়েছে কি না check
+
+NOTE:
+Circuit drawing Hardware Team/Designer-এর কাজ হতে পারে, কিন্তু submitted diagram actual firmware contract-এর সাথে match করছে কি না Developer verify করবে।
+
+TEST CASE 27 — SOFTWARE ARCHITECTURE DIAGRAM:
+
+1. Wokwi Zone Node
+2. Next.js REST Ingestion
+3. Risk/State/Incident/Priority/Command Services
+4. MongoDB
+5. WebSocket
+6. Dashboard
+7. Gemini/OpenRouter Bonus Layer
+8. Trained ML Predictor
+9. Data direction arrows
+10. Actual deployment-এর সাথে exact match
+
+TEST CASE 28 — API DOCUMENTATION:
+
+1. Method
+2. Path
+3. Auth
+4. Role
+5. Request example
+6. Response example
+7. Error example
+8. At minimum zone status, date-range incident history, acknowledge, manual override
+9. OpenAPI + human-readable table
+
+TEST CASE 29 — DATABASE SCHEMA DIAGRAM:
+
+1. MongoDB Collections
+2. IDs and reference fields
+3. One-to-many relationships
+4. Unique/partial indexes
+5. Validator notes
+6. NoSQL integrity strategy
+7. Actual implementation-এর সাথে exact match
+
+TEST CASE 30 — RISK FORMULA AND JUSTIFICATION:
+
+1. Exact implemented formula
+2. Normalization
+3. Fire debounce
+4. Gas warm-up
+5. Weights
+6. Thresholds
+7. Hysteresis
+8. Occupancy rationale
+9. Code, docs, dashboard, video একই formula
+
+TEST CASE 31 — VIDEO DEMONSTRATION QUALITY:
+
+1. Maximum reviewed duration 7 minutes
+2. Sections 06-10 test cases identifiable segments
+3. Live prototype
+4. Narration
+5. Actual failures/rejections shown
+6. Bonus clearly labeled
+7. Timestamped script
+8. No unverified claim
+
+BONUS 1 — CAMERA OCCUPANCY:
+
+1. PIR + camera cross-check
+2. Ranking integration
+3. False-empty reduction evidence
+
+BONUS 2 — RISK TREND:
+
+1. Moving average/slope
+2. Trending-toward-critical indicator
+3. Live score থেকে separate
+
+BONUS 3 — ACTUAL ML:
+
+1. Trained logistic regression
+2. Dataset disclosure
+3. Metrics
+4. Predicted Risk separate panel
+5. No actuation
+
+BONUS 4 — NATURAL LANGUAGE:
+
+1. Gemini 3.5 Flash
+2. OpenRouter fallback
+3. Structured output
+4. Deterministic validation
+5. Controlled ranking influence
+6. No direct actuation
+
+
+==================================================
+50. END-TO-END DEMONSTRATION SCENARIO
+==================================================
+
+One Continuous Scenario:
+
+STEP 1:
+All configured Zones SAFE।
+
+STEP 2:
+IoT Lab-এ Fire এবং Gas ধীরে বাড়ে।
+
+STEP 3:
+Server Room-এ Water Level বাড়ে।
+
+STEP 4:
+দুই Zone কয়েক Seconds-এর মধ্যে CRITICAL হয়।
+
+STEP 5:
+Backend Raw Reading Validate করে।
+
+STEP 6:
+দুই Zone-এর Risk Score Server-side Calculate হয়।
+
+STEP 7:
+দুই Incident Database-এ Create হয়।
+
+STEP 8:
+দুই Zone-এর Actuator Command Generate হয়।
+
+STEP 9:
+WebSocket Dashboard Update করে।
+
+STEP 10:
+Priority Engine দুই Zone Rank করে।
+
+STEP 11:
+Ranking Reason দেখায়।
+
+STEP 12:
+Security Staff Higher Priority Incident Acknowledge করে।
+
+STEP 13:
+Acknowledgment Database-এ Save হয়।
+
+STEP 14:
+দ্বিতীয় Staff একই Incident Acknowledge করার চেষ্টা করে।
+
+STEP 15:
+Second Request Already Acknowledged Response পায়।
+
+STEP 16:
+Sensor Values Normal হয়।
+
+STEP 17:
+Recovery Hysteresis complete হয়।
+
+STEP 18:
+দুই Incident Resolve হয়।
+
+STEP 19:
+Actuator Reset Command যায়।
+
+STEP 20:
+Priority Queue Empty হয়।
+
+STEP 21:
+System Idle State-এ ফিরে যায়।
+
+==================================================
+51. EDGE CASE DEMONSTRATION
+==================================================
+
+কমপক্ষে 3টি Requirement হলেও Software-এ সব 6টি Support করতে হবে।
+
+EDGE CASE 1:
+Sensor disconnected mid-incident।
+
+Expected:
+
+1. Connectivity OFFLINE
+2. Last Known State Preserve
+3. Incident Open
+4. Dashboard Offline
+5. False SAFE নয়
+
+EDGE CASE 2:
+Three Zones same second-এ CRITICAL।
+
+Expected:
+
+1. Three Incidents
+2. No Update Drop
+3. Stable Ranking
+4. Human-readable Reason
+
+EDGE CASE 3:
+Admin Override + Sensor Trigger একই সময়ে।
+
+Expected:
+
+1. No Double Command
+2. No Duplicate Incident
+3. Both Events Logged
+4. Cause Visible
+
+EDGE CASE 4:
+Browser Disconnect/Reconnect।
+
+Expected:
+
+1. Reconnecting State
+2. Full Snapshot
+3. Current Incident
+4. Current Priority
+5. No Stale Data
+
+EDGE CASE 5:
+Backend/System Restart।
+
+Expected:
+
+1. Database State Load
+2. Open Incident Restore
+3. Priority Rebuild
+4. No False SAFE
+
+EDGE CASE 6:
+Impossible Sensor Value।
+
+Expected:
+
+1. Reject
+2. Error Code
+3. Audit Log
+4. No Risk Calculation
+
+==================================================
+52. LOAD TESTING
+==================================================
+
+Load Test Script তৈরি করতে হবে।
+
+Scenarios:
+
+1. 30 Phantom Zones
+2. প্রতিটি Zone প্রতি second Reading পাঠাবে
+3. 10 Simultaneous Writes
+4. 3 State Changes within 1 second
+5. Duplicate Retry
+6. WebSocket Clients Connected
+
+Measure:
+
+1. Total Requests
+2. Success Rate
+3. Failed Requests
+4. Average Response Time
+5. P95 Response Time
+6. Dropped Reading
+7. Duplicate Handling
+8. Dashboard Responsiveness
+
+Target:
+
+1. No Data Loss
+2. No Crash
+3. No Freeze
+4. No Duplicate Incident
+5. Dashboard Responsive
+
+==================================================
+53. REAL CAMPUS 30+ ZONE SCALING EXPLANATION
+==================================================
+
+Current Hackathon Architecture একটি Next.js Node Instance এবং MongoDB Replica Set/Atlas-এ 3-30 Zone পর্যন্ত demonstrate করতে পারবে।
+
+30+ Zone Production Scale-এর জন্য Documentation-এ লিখতে হবে:
+
+1. Multiple Next.js/Node Instances behind Load Balancer
+2. Stateless REST handlers
+3. Shared MongoDB Atlas Replica Set
+4. Correct connection-pool sizing
+5. WebSocket fan-out through managed pub/sub অথবা Redis only when multiple instances are used
+6. Sensor ingestion queue only if sustained traffic requires buffering
+7. MongoDB Change Streams অথবা committed event outbox for cross-instance broadcast
+8. Read preference/reporting replica for heavy analytics
+9. High-volume readings-এর জন্য MongoDB time-series collection consideration
+10. Much larger scale-এ sharding consideration
+11. Central Monitoring
+12. Device Provisioning
+13. API Key Rotation
+14. Queue-based actuator command delivery
+15. Structured Logging and metrics
+16. Idempotent consumers
+
+Hackathon Prototype-এ এগুলো Implement করা বাধ্যতামূলক নয়।
+
+Round 1-এ Implement করতে হবে শুধু:
+
+1. 30+ phantom zone load script
+2. Stable ingestion
+3. Responsive dashboard
+4. No dropped readings
+5. Clear scaling explanation
+
+Redis, Message Broker, Change Streams, Sharding এবং Multi-instance deployment Core system stable হওয়ার আগে যোগ করা যাবে না।
+==================================================
+54. LOGGING AND OBSERVABILITY
+==================================================
+
+Structured Log ব্যবহার করতে হবে।
+
+Log Fields:
+
+1. timestamp
+2. request_id
+3. zone_code
+4. incident_id
+5. user_id
+6. action
+7. status
+8. duration_ms
+9. error_code
+
+Log করতে হবে:
+
+1. Reading Accepted
+2. Reading Rejected
+3. Duplicate
+4. State Change
+5. Incident
+6. Acknowledgment
+7. Override
+8. Reconnect
+9. Restart
+10. Prediction
+11. NLP Validation
+
+Secret Log করা যাবে না।
+
+==================================================
+55. DEPLOYMENT ARCHITECTURE
+==================================================
+
+LOCAL DEVELOPMENT:
+
+1. Docker Compose
+2. Next.js Node App Container
+3. MongoDB Replica Set Container(s)
+4. Replica Set Init Script
+5. Optional Mongo Express শুধু local debug
+6. No separate Python/ML Worker required
+7. Wokwi public tunnel/HTTPS endpoint as needed
+
+PUBLIC DEMO — RECOMMENDED:
+
+1. Dockerized Next.js Application on persistent Node host
+2. MongoDB Atlas Replica Set
+3. One Public HTTPS Application URL
+4. REST API under same origin
+5. Secure WSS WebSocket
+6. Wokwi Backend URL Access
+7. CORS/Origin configured
+8. Health and readiness endpoint
+9. Auto-restart
+10. Deployment logs
+
+PUBLIC DEMO — ALTERNATIVE:
+
+Next.js on Vercel ব্যবহার করা যাবে, কিন্তু Submit-এর আগে prove করতে হবে:
+
+1. WebSocket stays functional
+2. Background/offline checker works
+3. MongoDB transaction works
+4. Connection pooling is stable
+5. Wokwi can reach ingestion endpoint
+6. Restart/cold-start state recovery works
+
+Environment Variables:
+
+1. MONGODB_URI
+2. MONGODB_DB
+3. SESSION_SECRET
+4. ZONE_API_KEY_PEPPER
+5. APP_ORIGIN
+6. WOKWI_ALLOWED_ORIGINS
+7. GEMINI_API_KEY
+8. GEMINI_MODEL=gemini-3.5-flash
+9. OPENROUTER_API_KEY
+10. OPENROUTER_PRIMARY_MODEL=google/gemini-3.5-flash
+11. OPENROUTER_FALLBACK_MODELS
+12. AI_TIMEOUT_MS
+13. ML_MODEL_PATH
+14. LOG_LEVEL
+15. APP_ENV
+
+.env GitHub-এ Commit করা যাবে না।
+
+.env.example Commit করতে হবে।
+
+DEPLOYMENT SAFETY:
+
+1. AI key only server-side
+2. MongoDB network access restricted
+3. Database user least privilege
+4. HTTPS/WSS only
+5. Readiness fail হলে traffic না নেওয়া
+6. Schema migration deploy-এর আগে run
+7. Demo backup deploy-এর আগে নিতে হবে
+==================================================
+56. HEALTH CHECKS
+==================================================
+
+GET /health
+
+Return:
+
+1. Backend Process Running
+
+GET /ready
+
+Check:
+
+1. Database Connection
+2. Migration State
+3. Required Model Loaded
+4. Background Tasks Running
+
+Example:
+
+{
+  "status": "ready",
+  "database": "healthy",
+  "websocket": "healthy",
+  "ml_model": "loaded"
+}
+
+==================================================
+57. MIGRATIONS AND SEEDING
+==================================================
+
+MongoDB-এর জন্য Versioned Migration Script ব্যবহার করতে হবে।
+
+Alembic ব্যবহার করা হবে না।
+
+Migration System:
+
+1. schema_migrations Collection
+2. Ordered Migration Files
+3. Idempotent up/down অথবা forward-only operations
+4. Checksum
+5. Applied timestamp
+6. Startup-এ pending migration check
+7. Production startup-এ silent destructive migration নয়
+
+Migration Files:
+
+1. Create Collections
+2. Apply JSON Schema Validators
+3. Create Unique/Compound/Partial/TTL Indexes
+4. Seed Roles
+5. Seed Zones
+6. Seed Sensor Calibration
+7. Add later fields/indexes safely
+
+Recommended Files:
+
+scripts/migrations/
+├── 001-create-core-collections.ts
+├── 002-create-validators.ts
+├── 003-create-indexes.ts
+├── 004-seed-roles-zones.ts
+└── 005-add-ai-and-prediction-collections.ts
+
+Seed Data:
+
+1. 5 Candidate Zones
+2. 3 Configured Active Zones
+3. 2 NOT_CONFIGURED Zones
+4. 1 Admin User
+5. 1 Security Staff User
+6. Sensor Calibration
+7. 10,000+ Historical Reading
+8. Historical Incidents
+9. Mixed SAFE/WARNING/CRITICAL/OFFLINE states for demo mode
+10. ML Synthetic Training Dataset generated separately
+
+Plain Password Seed File-এ রাখা যাবে না।
+
+Demo Credentials:
+
+1. Environment Variable থেকে hash generate
+2. README-তে controlled demo credentials
+3. Submission-এর পরে credentials rotate করা উচিত
+
+Required Commands:
+
+1. npm run db:migrate
+2. npm run db:seed
+3. npm run db:seed:readings
+4. npm run db:indexes:verify
+5. npm run db:integrity:check
+==================================================
+58. CI QUALITY CHECK
+==================================================
+
+GitHub Action অথবা Local CI Script:
+
+1. TypeScript Type Check
+2. ESLint
+3. Unit Tests
+4. API Integration Tests
+5. MongoDB Transaction/Index Tests
+6. WebSocket Tests
+7. Next.js Production Build
+8. Playwright Critical E2E
+9. OpenAPI Validation
+10. Secret Scan Basic Check
+11. Migration Dry-run
+12. ML Model Metrics File Validation
+
+Main Branch Broken Code নিয়ে Submit করা যাবে না।
+
+Submission tag/commit তৈরি করতে হবে এবং submit করার পরে repository modify করা যাবে না।
+==================================================
+59. README REQUIREMENTS
+==================================================
+
+README-তে থাকবে:
+
+1. Project Overview
+2. Problem Statement Summary
+3. Target Users
+4. Track B Explanation
+5. Implemented Zones
+6. Architecture
+7. Technology Stack
+8. Features
+9. Bonus Features
+10. Repository Structure
+11. Prerequisites
+12. Environment Variables
+13. Database Setup
+14. Migration
+15. Seed
+16. Backend Run
+17. Frontend Run
+18. Wokwi Integration
+19. Test Accounts
+20. API Documentation
+21. WebSocket Events
+22. Risk Formula
+23. Priority Formula
+24. Test Commands
+25. Load Test
+26. ML Training
+27. Deployment
+28. Backup
+29. Limitations
+30. GitHub/Wokwi/Demo Links
+
+==================================================
+60. DESIGNER-কে SOFTWARE DOCUMENTATION CONTENT
+==================================================
+
+Developer Designer-কে দেবে:
+
+1. Final Architecture Description
+2. Data Flow
+3. Backend Module List
+4. API List
+5. Example Request/Response
+6. MongoDB Collections
+7. IDs, References and Unique Indexes
+8. ER Relationship
+9. Risk Formula
+10. Weight Justification
+11. Priority Formula
+12. Ranking Reason Examples
+13. Incident Lifecycle
+14. Authentication Flow
+15. RBAC Permission Matrix
+16. Race Condition Solution
+17. Duplicate Handling
+18. Restart Recovery
+19. Backup Strategy
+20. Retention Policy
+21. Indexes
+22. Load Test Result
+23. Query Performance Result
+24. ML Model Details
+25. ML Metrics
+26. NLP Validation Flow
+27. Test Case Results
+28. Screenshots
+29. Logs
+30. Video Evidence Timestamp
+
+Designer Diagram Design করবে, কিন্তু Technical Accuracy Developer Verify করবে।
+
+==================================================
+61. VIDEO DEMONSTRATION SUPPORT
+==================================================
+
+Developer Video-এর জন্য Prepared রাখবে:
+
+1. API Logs
+2. Backend Console
+3. Database Collections
+4. Dashboard
+5. Test Accounts
+6. Invalid Payload
+7. Duplicate Request
+8. Race Condition
+9. Date Filter
+10. Restart Recovery
+11. Load Test
+12. Bonus Panels
+
+প্রতিটি Test-এর আগে Data Reset Script থাকা ভালো।
+
+Developer Narration Notes দেবে:
+
+1. কী Input দেওয়া হচ্ছে
+2. Backend কী করছে
+3. Database-এ কী Save হচ্ছে
+4. Dashboard কেন Update হচ্ছে
+5. Expected Result কী
+
+==================================================
+62. DEVELOPMENT PRIORITY ORDER
+==================================================
+
+PHASE 1 — PDF CORE BACKEND/DATABASE:
+
+1. MongoDB Replica Set Setup
+2. Collections/Validators/Indexes
+3. Zone Authentication
+4. Reading Ingestion
+5. Zod Validation
+6. Duplicate Handling
+7. Late Reading Handling
+8. Risk Formula
+9. Fire Debounce
+10. Gas Warm-up
+11. State Machine
+12. Incident System
+13. Command Response
+14. Current Zone API
+15. Acknowledgment Race Safety
+16. Restart Recovery
+17. Offline Detection
+
+PHASE 2 — PDF CORE FRONTEND/INTEGRATION:
+
+1. Functional Login
+2. RBAC
+3. Live Zone Map
+4. WebSocket Snapshot + Events
+5. Priority Queue and Reason
+6. Incident Timeline
+7. Alert UX
+8. Mixed-state Accessibility
+9. Manual Override Conflict
+10. 10 Concurrent Writes
+11. 10,000+ Query Index Evidence
+12. Backup/Restore
+13. Retention Policy
+14. End-to-end Scenario
+15. At least 3 Edge Cases
+16. Combined Load
+17. Cross-component Consistency
+
+PHASE 3 — DOCUMENTATION AND VIDEO:
+
+1. Architecture Diagram
+2. API Documentation
+3. MongoDB ERD-style Schema Diagram
+4. Formula Justification
+5. Test Evidence
+6. 7-minute Video Script
+7. Public URLs
+8. README
+9. Repository Freeze Checklist
+
+PHASE 4 — BONUS:
+
+1. Camera Occupancy
+2. Risk Trend
+3. Trained Logistic Regression
+4. Gemini 3.5 Flash NLP
+5. OpenRouter Fallback
+6. AI/ML Safety Gates
+
+PHASE 5 — OPTIONAL POLISH ONLY IF TIME REMAINS:
+
+1. CSV Export
+2. User Management UI
+3. Zone CRUD UI
+4. Advanced Analytics
+5. Extra Reports
+6. CI Improvements
+
+DO NOT IMPLEMENT FOR ROUND 1:
+
+1. Kubernetes
+2. Microservice split
+3. Redis queue
+4. Complex event sourcing
+5. AI inference per sensor sample
+6. Unnecessary mobile app
+==================================================
+63. DEFINITION OF DONE
+==================================================
+
+Project Software Complete বলা যাবে যখন:
+
+1. Raw Reading Backend-এ আসে
+2. Invalid Reading Reject হয়
+3. Duplicate Reading Double Count হয় না
+4. Risk Score Server-side Calculate হয়
+5. SAFE/WARNING/CRITICAL কাজ করে
+6. Fire Debounce কাজ করে
+7. Gas Warm-up কাজ করে
+8. Water Reset কাজ করে
+9. Occupancy Offline কাজ করে
+10. Incident Create হয়
+11. Incident Duplicate হয় না
+12. Acknowledge Race Safe
+13. Incident Resolve হয়
+14. New Trigger New Incident তৈরি করে
+15. Priority Ranking Correct
+16. Ranking Reason Visible
+17. WebSocket Live Update কাজ করে
+18. Browser Reconnect Current State পায়
+19. Backend Restart State Restore করে
+20. Zone Offline False SAFE হয় না
+21. Manual Override Conflict Safe
+22. Ten Concurrent Writes Data হারায় না
+23. 10,000+ Seed Query Fast
+24. Backup Script কাজ করে
+25. Staff Admin API Call করতে পারে না
+26. Unknown Zone Reject হয়
+27. Load Test Pass হয়
+28. Camera Cross-check কাজ করে
+29. Trend Indicator কাজ করে
+30. Actual ML Prediction কাজ করে
+31. ML Actuator Trigger করতে পারে না
+32. NLP Structured Output তৈরি করে
+33. NLP Validation ছাড়া Ranking Affect করে না
+34. Frontend Designer Figma অনুযায়ী Functional
+35. All Core Test Evidence Ready
+36. All Bonus Evidence Ready
+37. README Complete
+38. GitHub Public
+39. Deployment Links Working
+40. Submission-এর পরে Repository Freeze করা হয়
+
+==================================================
+64. STRICT ENGINEERING RULES
+==================================================
+
+1. Risk Score Frontend-এ Calculate করা যাবে না
+2. Zone Node-এর State সরাসরি Trust করা যাবে না
+3. Database ছাড়া In-memory State-কে Source of Truth করা যাবে না
+4. Duplicate Reading Incident Create করতে পারবে না
+5. Offline Zone Safe দেখানো যাবে না
+6. Open Incident Restart-এর পরে হারানো যাবে না
+7. Staff Direct API দিয়ে Admin Action করতে পারবে না
+8. ML Physical Actuator Trigger করতে পারবে না
+9. NLP Output Validation ছাড়া ব্যবহার করা যাবে না
+10. Unimplemented Zone-এর Fake Data দেখানো যাবে না
+11. Hardcoded Zone List ব্যবহার করা যাবে না
+12. API Secret GitHub-এ রাখা যাবে না
+13. Documentation এবং Code-এর Formula আলাদা হতে পারবে না
+14. Dashboard এবং Database State Drift করতে পারবে না
+15. Test ছাড়া Feature Complete বলা যাবে না
+16. UI সুন্দর কিন্তু Non-functional রাখা যাবে না
+17. Video-তে শুধু Description নয়, Actual Test দেখাতে হবে
+18. Error silently ignore করা যাবে না
+19. Race Condition শুধু Frontend Button Disable দিয়ে Solve করা যাবে না
+20. সব Critical Software Action Audit Log-এ রাখতে হবে
+
+==================================================
+65. FINAL SOFTWARE DELIVERABLES
+==================================================
+
+NEXT.JS FULL-STACK APPLICATION:
+
+1. Working Next.js Backend/API
+2. Functional Dashboard
+3. TypeScript Strict Mode
+4. Authentication
+5. RBAC
+6. Zone API Key Authentication
+7. Ingestion API
+8. Zod Validation
+9. Risk Engine
+10. State Machine
+11. Incident Engine
+12. Priority Engine
+13. Command Engine
+14. WebSocket
+15. Offline Detection
+16. Restart Recovery
+17. Manual Override
+18. System Health
+19. Incident Reports
+20. Bonus Services
+
+MONGODB:
+
+1. MongoDB Collection Schema
+2. JSON Schema Validators
+3. Versioned Migration Files
+4. Seed Files
+5. Unique/Compound/Partial/TTL Indexes
+6. Multi-document Transactions
+7. 10,000+ Test Documents
+8. Integrity Check Script
+9. Backup Script
+10. Restore Script
+11. Restore Evidence
+12. Retention Policy
+
+FRONTEND IMPLEMENTATION:
+
+1. Functional Login
+2. Staff Dashboard
+3. Admin Dashboard
+4. Live Zone Monitoring
+5. Priority Queue
+6. Ranking Reason
+7. Multi-alert UX
+8. Incident History
+9. Incident Timeline
+10. System Health
+11. Manual Override
+12. Bonus Panels
+13. Loading/Error/Offline States
+14. Responsive Implementation
+15. Accessibility Label/Icon beyond color
+
+AI/ML BONUS:
+
+1. Camera Occupancy Cross-check
+2. Risk Trend
+3. Actual Trained Logistic Regression Prediction
+4. ML Metrics and Model File
+5. Gemini 3.5 Flash Natural-Language Reporting
+6. OpenRouter Fallback
+7. Strict Structured Output
+8. Deterministic Validation Gate
+9. AI/ML cannot trigger physical actuation
+
+TESTS:
+
+1. Unit Tests
+2. API Tests
+3. MongoDB Tests
+4. Transaction/Race Test
+5. WebSocket Tests
+6. Restart Test
+7. Offline/Reconnection Test
+8. Load Test
+9. Edge-case Tests
+10. Playwright E2E
+11. Test Result Evidence
+
+DOCUMENTATION CONTENT:
+
+1. API Details
+2. Architecture Details
+3. MongoDB Schema and Relationships
+4. Validators and Indexes
+5. Risk Formula
+6. Priority Formula
+7. Security
+8. Backup/Restore
+9. Retention
+10. Scaling
+11. ML Dataset/Model/Metrics
+12. Gemini/OpenRouter Fallback Design
+13. Test Results
+14. Limitations and Honest Assumptions
+
+SUBMISSION:
+
+1. Public GitHub Repository
+2. Complete README
+3. .env.example
+4. Public Deployment
+5. Working Application URL
+6. Working API URL
+7. OpenAPI/Swagger URL
+8. Wokwi Files/Links
+9. System Documentation PDF Content
+10. Video Evidence Support
+11. Repository Freeze after Submission
+
+FINAL RULE:
+
+Core 160 marks-এর কোনো Requirement অসম্পূর্ণ রেখে Optional Engineering Polish করা যাবে না। 200 marks target করতে হলে Core fully demonstrated হওয়ার পরে 4টি Bonus প্রত্যেকটি বাস্তবে Functional এবং Video-তে clearly shown হতে হবে।

@@ -3,25 +3,46 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "tsx server.ts",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "tsx server.ts",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "tsx tests/integration/acknowledge-race.ts",
+    "test:concurrency": "tsx tests/concurrency/concurrent-writes.ts",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:seed": "tsx scripts/seed.ts",
+    "db:seed:readings": "tsx scripts/seed-readings.ts",
+    "db:seed:phantoms": "tsx scripts/seed-phantom-zones.ts",
+    "db:indexes:verify": "tsx scripts/verify-indexes.ts",
+    "db:indexes:explain": "tsx scripts/explain-indexes.ts",
+    "db:integrity:check": "tsx scripts/integrity-check.ts",
+    "ml:train": "tsx scripts/train-risk-model.ts"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.4.2",
+    "mongodb": "^7.5.0",
     "next": "16.2.11",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "ws": "^8.21.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/ws": "^8.18.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.11",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.23.1",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   },
   "ignoreScripts": [
     "sharp",
