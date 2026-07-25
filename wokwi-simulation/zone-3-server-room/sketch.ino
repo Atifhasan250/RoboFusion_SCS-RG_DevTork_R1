@@ -25,14 +25,36 @@ const int PIN_LED_CRIT = 27;  // Red LED
 const int PIN_BUZZER = 14;    // Buzzer
 const int PIN_RELAY = 32;     // Relay (Power Cutoff)
 
-// --- Timers ---
+// --- State & Timers ---
+String bootId = "";
+unsigned long sequence = 1;
 unsigned long lastReadingTime = 0;
 unsigned long lastCommandTime = 0;
 const int READING_INTERVAL = 500;  // Send readings every 500ms
 const int COMMAND_INTERVAL = 1000; // Poll commands every 1000ms
 
+// --- Offline Queue ---
+const int MAX_QUEUE = 10;
+String offlineQueue[MAX_QUEUE];
+int queueHead = 0;
+int queueTail = 0;
+int queueCount = 0;
+
+void enqueueReading(String payload) {
+  if (queueCount < MAX_QUEUE) {
+    offlineQueue[queueTail] = payload;
+    queueTail = (queueTail + 1) % MAX_QUEUE;
+    queueCount++;
+  }
+}
+
 void setup() {
   Serial.begin(115200);
+  randomSeed(analogRead(0));
+  bootId = "boot-";
+  for(int i=0; i<6; i++) {
+    bootId += String(random(0, 16), HEX);
+  }
 
   // Initialize Input Pins
   pinMode(PIN_FIRE, INPUT_PULLUP); // Switch connects to GND, so default is HIGH
@@ -81,30 +103,7 @@ void loop() {
   }
 }
 
-void sendReadings() {
-  if (WiFi.status() != WL_CONNECTED) return;
-
-  // Read sensors
-  // Note: Slide switch with pullup is LOW when closed, HIGH when open.
-  // Assuming closed (LOW) = 1 (Fire). Adjust if your physical switch is different.
-  int fireVal = (digitalRead(PIN_FIRE) == LOW) ? 1 : 0; 
-  int gasVal = analogRead(PIN_GAS);
-  int waterVal = analogRead(PIN_WATER);
-  int motionVal = digitalRead(PIN_MOTION);
-  bool cameraOcc = (digitalRead(PIN_CAMERA) == LOW);
-
-  // Create JSON payload
-  StaticJsonDocument<200> doc;
-  doc["fire"] = fireVal;
-  doc["gas"] = gasVal;
-  doc["water"] = waterVal;
-  doc["motion"] = motionVal;
-  doc["cameraOccupancy"] = cameraOcc; // Bonus 1 Support
-
-  String requestBody;
-  serializeJson(doc, requestBody);
-
-  // Send POST Request
+void sendPostRequest(String requestBody, bool isQueued) {
   HTTPClient http;
   String url = String(BACKEND_URL) + "/api/v1/readings/" + ZONE_CODE;
   http.begin(url);
@@ -113,13 +112,55 @@ void sendReadings() {
 
   int httpResponseCode = http.POST(requestBody);
   if (httpResponseCode > 0) {
-    // Serial.print("Readings POST: ");
-    // Serial.println(httpResponseCode); // Commented out to reduce serial spam
+    if (httpResponseCode != 200 && httpResponseCode != 201) {
+      Serial.print("API Error ");
+      Serial.print(httpResponseCode);
+      Serial.print(": ");
+      Serial.println(http.getString());
+    }
   } else {
     Serial.print("Error sending readings: ");
     Serial.println(http.errorToString(httpResponseCode));
   }
   http.end();
+}
+
+void sendReadings() {
+  int fireVal = (digitalRead(PIN_FIRE) == LOW) ? 1 : 0; 
+  int gasVal = analogRead(PIN_GAS);
+  int waterVal = map(analogRead(PIN_WATER), 0, 4095, 0, 100);
+  int motionVal = digitalRead(PIN_MOTION);
+  bool cameraOcc = (digitalRead(PIN_CAMERA) == LOW);
+
+  StaticJsonDocument<500> doc;
+  doc["bootId"] = bootId;
+  doc["sequence"] = sequence++;
+  doc["timestamp"] = "2026-07-25T12:00:00Z";
+  doc["fire"] = (fireVal == 1);
+  doc["gas"] = gasVal;
+  doc["water"] = waterVal;
+  doc["pir"] = (motionVal == 1);
+  doc["cameraOccupancy"] = cameraOcc;
+  doc["sensorHealth"] = "HEALTHY";
+  doc["deviceUptimeSeconds"] = millis() / 1000;
+  doc["sampleIntervalMs"] = READING_INTERVAL;
+
+  String requestBody;
+  serializeJson(doc, requestBody);
+
+  if (WiFi.status() != WL_CONNECTED) {
+    enqueueReading(requestBody);
+    return;
+  }
+
+  while(queueCount > 0) {
+    String queuedBody = offlineQueue[queueHead];
+    sendPostRequest(queuedBody, true);
+    queueHead = (queueHead + 1) % MAX_QUEUE;
+    queueCount--;
+  }
+
+  sendPostRequest(requestBody, false);
 }
 
 void fetchCommands() {
@@ -177,7 +218,7 @@ void acknowledgeCommand(String commandId) {
   http.addHeader("x-zone-api-key", ZONE_API_KEY);
 
   StaticJsonDocument<200> doc;
-  doc["commandId"] = commandId;
+  doc["command_id"] = commandId;
   String requestBody;
   serializeJson(doc, requestBody);
 

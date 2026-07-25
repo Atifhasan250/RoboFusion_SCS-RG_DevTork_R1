@@ -127,12 +127,12 @@ export interface HysteresisInput {
   newRiskScore: number;
   consecutiveAboveThreshold: number; // readings >= threshold
   consecutiveBelowThreshold: number; // readings < recovery threshold
-  stableSinceMs: number; // how long in current risk band
+  recoveryStableMs: number; // how long risk has been below recovery threshold
   fireJustConfirmed: boolean; // allows immediate CRITICAL on fire
 }
 
 export function applyHysteresis(input: HysteresisInput): SafetyState {
-  const { currentState, newRiskScore, consecutiveAboveThreshold, consecutiveBelowThreshold, stableSinceMs, fireJustConfirmed } = input;
+  const { currentState, newRiskScore, consecutiveAboveThreshold, consecutiveBelowThreshold, recoveryStableMs, fireJustConfirmed } = input;
 
   // Immediate CRITICAL on confirmed fire regardless of hysteresis
   if (fireJustConfirmed && newRiskScore >= 65) return "CRITICAL";
@@ -146,12 +146,12 @@ export function applyHysteresis(input: HysteresisInput): SafetyState {
     case "WARNING":
       if (newRiskScore >= 65 && consecutiveAboveThreshold >= 2) return "CRITICAL";
       // Recover WARNING → SAFE: risk < 25 AND >= 5s stable
-      if (newRiskScore < 25 && consecutiveBelowThreshold >= 2 && stableSinceMs >= 5000) return "SAFE";
+      if (newRiskScore < 25 && consecutiveBelowThreshold >= 2 && recoveryStableMs >= 5000) return "SAFE";
       return "WARNING";
 
     case "CRITICAL":
       // Recover CRITICAL → WARNING: risk < 55 AND >= 5s stable
-      if (newRiskScore < 55 && consecutiveBelowThreshold >= 2 && stableSinceMs >= 5000) return "WARNING";
+      if (newRiskScore < 55 && consecutiveBelowThreshold >= 2 && recoveryStableMs >= 5000) return "WARNING";
       return "CRITICAL";
 
     default:

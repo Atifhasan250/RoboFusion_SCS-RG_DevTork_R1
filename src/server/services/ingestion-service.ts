@@ -112,6 +112,7 @@ export async function ingest(zoneCode: string, key: string | null, data: Payload
       lastReceivedAt: null,
       warningSince: null,
       criticalSince: null,
+      recoverySince: null,
       consecutiveWarningReadings: 0,
       consecutiveCriticalReadings: 0,
       consecutiveSafeReadings: 0,
@@ -168,9 +169,16 @@ export async function ingest(zoneCode: string, key: string | null, data: Payload
   // ── Hysteresis state transition ───────────────────────────────────────────
   let { consecutiveWarningReadings, consecutiveCriticalReadings, consecutiveSafeReadings } = zs;
   const prevState = zs.safetyState;
-  const stableSinceMs = zs.warningSince || zs.criticalSince
-    ? Date.now() - (zs.warningSince ?? zs.criticalSince ?? now).getTime()
-    : 0;
+  let recoverySince = zs.recoverySince;
+  if (prevState === "CRITICAL" && risk.score < 55) {
+    if (!recoverySince) recoverySince = now;
+  } else if (prevState === "WARNING" && risk.score < 25) {
+    if (!recoverySince) recoverySince = now;
+  } else {
+    recoverySince = null;
+  }
+
+  const recoveryStableMs = recoverySince ? now.getTime() - recoverySince.getTime() : 0;
 
   if (risk.score >= 65) { consecutiveCriticalReadings++; consecutiveWarningReadings++; consecutiveSafeReadings = 0; }
   else if (risk.score >= 30) { consecutiveWarningReadings++; consecutiveCriticalReadings = 0; consecutiveSafeReadings = 0; }
@@ -181,7 +189,7 @@ export async function ingest(zoneCode: string, key: string | null, data: Payload
     newRiskScore: risk.score,
     consecutiveAboveThreshold: risk.score >= 65 ? consecutiveCriticalReadings : consecutiveWarningReadings,
     consecutiveBelowThreshold: consecutiveSafeReadings,
-    stableSinceMs,
+    recoveryStableMs,
     fireJustConfirmed,
   });
 
@@ -253,8 +261,16 @@ export async function ingest(zoneCode: string, key: string | null, data: Payload
           updatedAt: now,
           warningSince: nextSafetyState === "WARNING" && prevState !== "WARNING" ? now : (nextSafetyState === "WARNING" ? zs.warningSince : null),
           criticalSince: nextSafetyState === "CRITICAL" && prevState !== "CRITICAL" ? now : (nextSafetyState === "CRITICAL" ? zs.criticalSince : null),
+          recoverySince,
         };
-        await c.zone_states.updateOne({ zoneId: zone.id }, { $set: zoneStateUpdate }, { session, upsert: true });
+        const updateResult = await c.zone_states.updateOne(
+          { zoneId: zone.id, stateVersion: zs.stateVersion },
+          { $set: zoneStateUpdate },
+          { session }
+        );
+        if (updateResult.matchedCount === 0) {
+          throw new IngestionError(409, "CONCURRENT_UPDATE", "Zone state was modified concurrently");
+        }
 
         // 3. Update zone snapshot (for fast reads)
         await c.zones.updateOne(
@@ -262,7 +278,6 @@ export async function ingest(zoneCode: string, key: string | null, data: Payload
           { $set: { state: nextSafetyState, riskScore: risk.score, primaryHazard: risk.primaryHazard, occupancy, connectivityState, lastReadingAt: data.timestamp, lastSequence: data.sequence, commandVersion: newStaleVersion, updatedAt: now } },
           { session }
         );
-      }
 
       // 4. Incident management
       const activeIncident: Incident | null = await c.incidents.findOne({ zoneId: zone.id, active: true }, { session }) as Incident | null;
@@ -323,7 +338,7 @@ export async function ingest(zoneCode: string, key: string | null, data: Payload
       }
 
       // 5. State change events
-      if (stateChanged && !isLate) {
+      if (stateChanged) {
         const evtTypeMap: Record<SafetyState, IncidentEvent["eventType"]> = {
           CRITICAL: "ZONE_CRITICAL", WARNING: "ZONE_WARNING", SAFE: "ZONE_SAFE",
         };
@@ -332,20 +347,20 @@ export async function ingest(zoneCode: string, key: string | null, data: Payload
       }
 
       // 6. Persist actuator command (only if state changed or new command version)
-      if (!isLate) {
-        const prevCmd = await c.actuator_commands.findOne({ zoneId: zone.id, stateVersion: newStaleVersion - 1 }, { session });
-        const newCmdState = connectivityState === "OFFLINE" ? "OFFLINE" : nextSafetyState;
-        const cmdLed = newCmdState === "CRITICAL" ? "RED" : newCmdState === "WARNING" ? "YELLOW" : newCmdState === "OFFLINE" ? "BLUE" : "GREEN";
+      const prevCmd = await c.actuator_commands.findOne({ zoneId: zone.id, stateVersion: newStaleVersion - 1 }, { session });
+      const newCmdState = connectivityState === "OFFLINE" ? "OFFLINE" : nextSafetyState;
+      const cmdLed = newCmdState === "CRITICAL" ? "RED" : newCmdState === "WARNING" ? "YELLOW" : newCmdState === "OFFLINE" ? "BLUE" : "GREEN";
 
-        // Only create a new command doc if the actuator state actually changed
-        if (!prevCmd || prevCmd.led !== cmdLed || prevCmd.buzzer !== (newCmdState === "CRITICAL") || prevCmd.relayCutoff !== (newCmdState === "CRITICAL")) {
-          const newCmd = buildCommand(newCmdState as SafetyState | "OFFLINE", newStaleVersion, zone.id, openIncident?.id ?? null);
-          await c.actuator_commands.insertOne(newCmd, { session });
-          command = newCmd;
-        } else {
-          command = prevCmd as ActuatorCommand;
-        }
+      // Only create a new command doc if the actuator state actually changed
+      if (!prevCmd || prevCmd.led !== cmdLed || prevCmd.buzzer !== (newCmdState === "CRITICAL") || prevCmd.relayCutoff !== (newCmdState === "CRITICAL")) {
+        const newCmd = buildCommand(newCmdState as SafetyState | "OFFLINE", newStaleVersion, zone.id, openIncident?.id ?? null);
+        await c.actuator_commands.insertOne(newCmd, { session });
+        command = newCmd;
+      } else {
+        command = prevCmd as ActuatorCommand;
       }
+      
+      } // End of !isLate block
     });
   } finally {
     await session.endSession();

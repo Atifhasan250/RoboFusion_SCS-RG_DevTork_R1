@@ -19,6 +19,7 @@
     "db:indexes:verify": "tsx scripts/verify-indexes.ts",
     "db:indexes:explain": "tsx scripts/explain-indexes.ts",
     "db:integrity:check": "tsx scripts/integrity-check.ts",
+    "db:backup": "powershell ./scripts/backup-mongodb.ps1",
     "ml:train": "tsx scripts/train-risk-model.ts"
   },
   "dependencies": {

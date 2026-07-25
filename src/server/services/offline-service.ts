@@ -11,9 +11,12 @@ export async function markOfflineZones(maxAgeMs = 10_000) {
   // Find configured zones that haven't been heard from
   const stale = await c.zones.find({
     configured: true,
-    lastReadingAt: { $lt: cutoff },
-    state: { $nin: ["OFFLINE", "NOT_CONFIGURED"] },
-  }).toArray();
+    $or: [
+      { lastReadingAt: { $lt: cutoff } },
+      { lastReadingAt: { $exists: false }, createdAt: { $lt: cutoff } }
+    ],
+    connectivityState: { $ne: "OFFLINE" },
+  } as any).toArray();
 
   for (const zone of stale) {
     await c.zones.updateOne(

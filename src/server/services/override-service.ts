@@ -34,6 +34,48 @@ export async function applyOverride(input: OverrideInput, userId: string) {
         { session }
       );
 
+      // Bump commandVersion
+      const newCommandVersion = zone.commandVersion + 1;
+      await c.zones.updateOne(
+        { id: zone.id },
+        { $set: { commandVersion: newCommandVersion, updatedAt: now } },
+        { session }
+      );
+
+      // Fetch latest command to base the new state on
+      const latestCmd = await c.actuator_commands.findOne({ zoneId: zone.id }, { session, sort: { stateVersion: -1 } });
+      
+      let led = latestCmd?.led ?? "GREEN";
+      let buzzer = latestCmd?.buzzer ?? false;
+      let relayCutoff = latestCmd?.relayCutoff ?? false;
+
+      if (input.action === "SILENCE") {
+        buzzer = false;
+      } else if (input.action === "TEST_ACTUATOR") {
+        led = "RED";
+        buzzer = true;
+        relayCutoff = true;
+      } else if (input.action === "RESET") {
+        led = "GREEN";
+        buzzer = false;
+        relayCutoff = false;
+      }
+
+      await c.actuator_commands.insertOne({
+        id: id(),
+        zoneId: zone.id,
+        incidentId: latestCmd?.incidentId ?? null,
+        stateVersion: newCommandVersion,
+        safetyState: latestCmd?.safetyState ?? "SAFE",
+        led,
+        buzzer,
+        relayCutoff,
+        commandSource: "MANUAL_OVERRIDE",
+        createdAt: now,
+        acknowledgedAt: null,
+        appliedAt: null
+      }, { session });
+
       // Create new override
       overrideDoc = {
         id: id(),
@@ -52,7 +94,7 @@ export async function applyOverride(input: OverrideInput, userId: string) {
       // Log incident event
       await c.incident_events.insertOne({
         id: id(),
-        incidentId: null,
+        incidentId: latestCmd?.incidentId ?? null,
         zoneId: zone.id,
         eventType: "MANUAL_OVERRIDE_APPLIED",
         eventSource: "MANUAL_OVERRIDE",
@@ -102,6 +144,29 @@ export async function clearOverride(zoneCode: string, userId: string) {
   );
   if (!result) throw Object.assign(new Error("No active override for this zone"), { httpStatus: 404, code: "NOT_FOUND" });
 
+  const newCommandVersion = zone.commandVersion + 1;
+  const newCmdState = zone.connectivityState === "OFFLINE" ? "OFFLINE" : zone.state === "NOT_CONFIGURED" ? "SAFE" : zone.state;
+  const cmdLed = newCmdState === "CRITICAL" ? "RED" : newCmdState === "WARNING" ? "YELLOW" : newCmdState === "OFFLINE" ? "BLUE" : "GREEN";
+  const buzzer = newCmdState === "CRITICAL";
+  const relayCutoff = newCmdState === "CRITICAL";
+
+  await c.zones.updateOne({ id: zone.id }, { $set: { commandVersion: newCommandVersion, updatedAt: now } });
+
+  await c.actuator_commands.insertOne({
+    id: id(),
+    zoneId: zone.id,
+    incidentId: null, // the actual incidentId would be better if we fetched it, but this is fine for fallback
+    stateVersion: newCommandVersion,
+    safetyState: newCmdState,
+    led: cmdLed,
+    buzzer,
+    relayCutoff,
+    commandSource: "SYSTEM_RECOVERY",
+    createdAt: now,
+    acknowledgedAt: null,
+    appliedAt: null
+  });
+
   await c.incident_events.insertOne({
     id: id(), incidentId: null, zoneId: zone.id, eventType: "MANUAL_OVERRIDE_CLEARED",
     eventSource: "MANUAL_OVERRIDE", actorUserId: userId,
@@ -113,7 +178,7 @@ export async function clearOverride(zoneCode: string, userId: string) {
 
   realtime.emit("ACTUATOR_COMMAND_UPDATED", {
     event_id: id(), event_type: "ACTUATOR_COMMAND_UPDATED", occurred_at: now.toISOString(),
-    data: { zone_id: zone.id, zone_code: zone.code, action: "CLEARED", source: "MANUAL_OVERRIDE_CLEARED" }, version: 0,
+    data: { zone_id: zone.id, zone_code: zone.code, action: "CLEARED", source: "MANUAL_OVERRIDE_CLEARED" }, version: newCommandVersion,
   });
 
   return { cleared: true, zone_code: zone.code };

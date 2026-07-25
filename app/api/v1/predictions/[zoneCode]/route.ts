@@ -2,4 +2,53 @@ import { NextResponse } from "next/server";
 import { requireUser, AuthError } from "@/src/server/auth/session";
 import { collections } from "@/src/server/db/collections";
 import { predictRisk } from "@/src/server/ml/inference";
-export async function GET(_:Request,ctx:{params:Promise<{zoneCode:string}>}){try{await requireUser();const{zoneCode}=await ctx.params,c=await collections(),zone=await c.zones.findOne({code:zoneCode});if(!zone)return NextResponse.json({error:"NOT_FOUND"},{status:404});const readings=await c.readings.find({zoneId:zone.id}).sort({observedAt:-1}).limit(6).toArray(),current=readings[0];if(!current)return NextResponse.json({error:"NO_DATA"},{status:404});const slope=readings.length>1?(readings[0].riskScore-readings.at(-1)!.riskScore)/readings.length/100:0;return NextResponse.json({prediction:await predictRisk({gas:current.normalized.gas,water:current.normalized.water,fire:current.fire?1:0,occupancy:current.normalized.occupancy,slope}),liveRiskScore:current.riskScore,safety:"Prediction is advisory only and cannot issue physical actuator commands."})}catch(e){return NextResponse.json({error:e instanceof AuthError?e.code:"ERROR"},{status:e instanceof AuthError?e.status:500})}}
+import { id as generateId } from "@/src/server/utils/id";
+
+export async function GET(_: Request, ctx: { params: Promise<{ zoneCode: string }> }) {
+  try {
+    await requireUser();
+    const { zoneCode } = await ctx.params;
+    const c = await collections();
+    const zone = await c.zones.findOne({ code: zoneCode });
+    if (!zone) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+    
+    const readings = await c.readings.find({ zoneId: zone.id }).sort({ observedAt: -1 }).limit(6).toArray();
+    const current = readings[0];
+    if (!current) return NextResponse.json({ error: "NO_DATA" }, { status: 404 });
+    
+    const slope = readings.length > 1 ? (readings[0].riskScore - readings.at(-1)!.riskScore) / readings.length / 100 : 0;
+    const features = {
+      gas: current.normalized.gas,
+      water: current.normalized.water,
+      fire: current.fire ? 1 : 0,
+      occupancy: current.normalized.occupancy,
+      slope
+    };
+    
+    const predictionResult = await predictRisk(features);
+
+    const now = new Date();
+    await c.predictions.insertOne({
+      id: generateId(),
+      zoneId: zone.id,
+      source: "TRAINED_MODEL",
+      probability: predictionResult.probability,
+      modelVersion: predictionResult.modelVersion,
+      horizonMinutes: 5,
+      featureSnapshot: features,
+      advisoryOnly: true,
+      predictedAt: now
+    });
+
+    return NextResponse.json({
+      prediction: predictionResult,
+      liveRiskScore: current.riskScore,
+      safety: "Prediction is advisory only and cannot issue physical actuator commands."
+    });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof AuthError ? e.code : "ERROR" },
+      { status: e instanceof AuthError ? e.status : 500 }
+    );
+  }
+}

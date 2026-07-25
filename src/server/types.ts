@@ -75,6 +75,7 @@ export interface ZoneStateDoc {
   // Hysteresis tracking
   warningSince: Date | null;
   criticalSince: Date | null;
+  recoverySince: Date | null;
   consecutiveWarningReadings: number;
   consecutiveCriticalReadings: number;
   consecutiveSafeReadings: number;

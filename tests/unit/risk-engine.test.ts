@@ -70,7 +70,7 @@ describe("State Hysteresis (PDF Section 15)", () => {
     const result = applyHysteresis({
       currentState: "SAFE", newRiskScore: 35,
       consecutiveAboveThreshold: 1, consecutiveBelowThreshold: 0,
-      stableSinceMs: 0, fireJustConfirmed: false,
+      recoveryStableMs: 0, fireJustConfirmed: false,
     });
     expect(result).toBe("SAFE");
   });
@@ -79,7 +79,7 @@ describe("State Hysteresis (PDF Section 15)", () => {
     const result = applyHysteresis({
       currentState: "SAFE", newRiskScore: 35,
       consecutiveAboveThreshold: 2, consecutiveBelowThreshold: 0,
-      stableSinceMs: 0, fireJustConfirmed: false,
+      recoveryStableMs: 0, fireJustConfirmed: false,
     });
     expect(result).toBe("WARNING");
   });
@@ -88,7 +88,7 @@ describe("State Hysteresis (PDF Section 15)", () => {
     const result = applyHysteresis({
       currentState: "CRITICAL", newRiskScore: 40,
       consecutiveAboveThreshold: 0, consecutiveBelowThreshold: 3,
-      stableSinceMs: 2000, fireJustConfirmed: false,
+      recoveryStableMs: 2000, fireJustConfirmed: false,
     });
     expect(result).toBe("CRITICAL");
   });
@@ -97,7 +97,7 @@ describe("State Hysteresis (PDF Section 15)", () => {
     const result = applyHysteresis({
       currentState: "CRITICAL", newRiskScore: 40,
       consecutiveAboveThreshold: 0, consecutiveBelowThreshold: 3,
-      stableSinceMs: 5000, fireJustConfirmed: false,
+      recoveryStableMs: 5000, fireJustConfirmed: false,
     });
     expect(result).toBe("WARNING");
   });
@@ -106,7 +106,7 @@ describe("State Hysteresis (PDF Section 15)", () => {
     const result = applyHysteresis({
       currentState: "WARNING", newRiskScore: 20,
       consecutiveAboveThreshold: 0, consecutiveBelowThreshold: 3,
-      stableSinceMs: 5000, fireJustConfirmed: false,
+      recoveryStableMs: 5000, fireJustConfirmed: false,
     });
     expect(result).toBe("SAFE");
   });
@@ -115,7 +115,7 @@ describe("State Hysteresis (PDF Section 15)", () => {
     const result = applyHysteresis({
       currentState: "SAFE", newRiskScore: 70,
       consecutiveAboveThreshold: 0, consecutiveBelowThreshold: 0,
-      stableSinceMs: 0, fireJustConfirmed: true,
+      recoveryStableMs: 0, fireJustConfirmed: true,
     });
     expect(result).toBe("CRITICAL");
   });

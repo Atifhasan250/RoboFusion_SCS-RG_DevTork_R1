@@ -94,7 +94,7 @@ export async function priorityQueue() {
     .map((inc) => {
       const criticalSince = inc.zoneState?.criticalSince ?? inc.startedAt ?? inc.openedAt ?? new Date();
       const occupied = inc.zone.occupancy;
-      const riskScore = inc.peakRiskScore ?? inc.riskScore ?? 0;
+      const riskScore = inc.zoneState?.riskScore ?? inc.riskScore ?? 0;
       const pScore = priorityScore(riskScore, occupied, criticalSince);
       const durationSecs = Math.max(0, (Date.now() - new Date(criticalSince).getTime()) / 1000);
       const durationBonus = Math.min(10, durationSecs / 30);
@@ -104,7 +104,9 @@ export async function priorityQueue() {
       if (b.pScore !== a.pScore) return b.pScore - a.pScore;
       if (b.riskScore !== a.riskScore) return b.riskScore - a.riskScore;
       if (a.occupied !== b.occupied) return a.occupied ? -1 : 1;
-      return new Date(a.criticalSince).getTime() - new Date(b.criticalSince).getTime();
+      const timeDiff = new Date(a.criticalSince).getTime() - new Date(b.criticalSince).getTime();
+      if (timeDiff !== 0) return timeDiff;
+      return a.inc.zone.code.localeCompare(b.inc.zone.code);
     });
 
   return ranked.map(({ inc, pScore, riskScore, occupied, criticalSince, durationBonus }, idx) => ({
