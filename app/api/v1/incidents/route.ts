@@ -11,12 +11,22 @@ export async function GET(req: Request) {
 
     const url = new URL(req.url);
     const status = url.searchParams.get("status") || "active";
+    const from = url.searchParams.get("from");
+    const to = url.searchParams.get("to");
+    const zoneId = url.searchParams.get("zoneId");
+    
     const filter: any = {};
     
-    if (status === "active") {
-      filter.active = true;
-    } else if (status === "resolved") {
-      filter.status = "RESOLVED";
+    if (status === "active") filter.active = true;
+    else if (status === "resolved") filter.status = "RESOLVED";
+    else if (status === "OPEN" || status === "ACKNOWLEDGED" || status === "RESOLVED") filter.status = status;
+
+    if (zoneId) filter.zoneId = zoneId;
+
+    if (from || to) {
+      filter.startedAt = {};
+      if (from) filter.startedAt.$gte = new Date(from);
+      if (to) filter.startedAt.$lte = new Date(to);
     }
 
     const incidents = await c.incidents

@@ -146,12 +146,12 @@ export function applyHysteresis(input: HysteresisInput): SafetyState {
     case "WARNING":
       if (newRiskScore >= 65 && consecutiveAboveThreshold >= 2) return "CRITICAL";
       // Recover WARNING → SAFE: risk < 25 AND >= 5s stable
-      if (newRiskScore < 25 && consecutiveBelowThreshold >= 2 && recoveryStableMs >= 5000) return "SAFE";
+      if (newRiskScore < 25 && recoveryStableMs >= 5000) return "SAFE";
       return "WARNING";
 
     case "CRITICAL":
       // Recover CRITICAL → WARNING: risk < 55 AND >= 5s stable
-      if (newRiskScore < 55 && consecutiveBelowThreshold >= 2 && recoveryStableMs >= 5000) return "WARNING";
+      if (newRiskScore < 55 && recoveryStableMs >= 5000) return "WARNING";
       return "CRITICAL";
 
     default:

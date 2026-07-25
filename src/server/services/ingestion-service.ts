@@ -70,6 +70,36 @@ function buildEvent(
 }
 
 export async function ingest(zoneCode: string, key: string | null, data: Payload) {
+  let retryCount = 0;
+  while (true) {
+    try {
+      return await doIngest(zoneCode, key, data);
+    } catch (e: any) {
+      if (e.code === 11000) {
+        const c = await collections();
+        const zone = await c.zones.findOne({ code: zoneCode });
+        if (zone) {
+          const existingReading = await c.readings.findOne({ zoneId: zone.id, bootId: data.bootId ?? "default", sequence: data.sequence });
+          const latestCmd = await c.actuator_commands.findOne({ zoneId: zone.id }, { sort: { stateVersion: -1 } });
+          return {
+            accepted: true,
+            duplicate: true,
+            reading_id: existingReading?.id,
+            zone: { safety_state: zone.state, connectivity_state: zone.connectivityState ?? "ONLINE", risk_score: zone.riskScore, state_version: zone.commandVersion },
+            command: latestCmd ? { command_id: latestCmd.id, state_version: latestCmd.stateVersion, led: latestCmd.led, buzzer: latestCmd.buzzer, relay_cutoff: latestCmd.relayCutoff } : null,
+          };
+        }
+      }
+      if (e instanceof IngestionError && e.code === "CONCURRENT_UPDATE" && retryCount < 3) {
+        retryCount++;
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
+async function doIngest(zoneCode: string, key: string | null, data: Payload) {
   const c = await collections();
 
   // ── Auth ──────────────────────────────────────────────────────────────────
@@ -98,8 +128,8 @@ export async function ingest(zoneCode: string, key: string | null, data: Payload
   const now = new Date();
 
   if (!zoneState) {
-    // Bootstrap zone state doc
-    const bootstrap: ZoneStateDoc = {
+    // Bootstrap zone state doc using upsert to avoid race conditions
+    const bootstrap: Omit<ZoneStateDoc, "_id"> = {
       zoneId: zone.id,
       safetyState: "SAFE",
       connectivityState: "ONLINE",
@@ -123,8 +153,13 @@ export async function ingest(zoneCode: string, key: string | null, data: Payload
       stateVersion: 0,
       updatedAt: now,
     };
-    await c.zone_states.insertOne(bootstrap);
-    zoneState = bootstrap as unknown as typeof zoneState;
+    
+    const result = await c.zone_states.findOneAndUpdate(
+       { zoneId: zone.id },
+       { $setOnInsert: bootstrap },
+       { upsert: true, returnDocument: "after" }
+    );
+    zoneState = result as typeof zoneState;
   }
   // zoneState is non-null from here on
   const zs = zoneState!;
@@ -351,9 +386,31 @@ export async function ingest(zoneCode: string, key: string | null, data: Payload
       const newCmdState = connectivityState === "OFFLINE" ? "OFFLINE" : nextSafetyState;
       const cmdLed = newCmdState === "CRITICAL" ? "RED" : newCmdState === "WARNING" ? "YELLOW" : newCmdState === "OFFLINE" ? "BLUE" : "GREEN";
 
+      // Expire old overrides
+      await c.manual_overrides.updateMany(
+        { zoneId: zone.id, active: true, expiresAt: { $lte: now } },
+        { $set: { active: false, status: "EXPIRED" } },
+        { session }
+      );
+
+      const activeOverride = await c.manual_overrides.findOne({ zoneId: zone.id, active: true }, { session });
+      
+      let cmdBuzzer = newCmdState === "CRITICAL";
+      let cmdRelay = newCmdState === "CRITICAL";
+
+      if (activeOverride) {
+        if (activeOverride.action === "SILENCE") cmdBuzzer = false;
+        if (activeOverride.action === "TEST_ACTUATOR") {
+           cmdBuzzer = true;
+           cmdRelay = true;
+        }
+      }
+
       // Only create a new command doc if the actuator state actually changed
-      if (!prevCmd || prevCmd.led !== cmdLed || prevCmd.buzzer !== (newCmdState === "CRITICAL") || prevCmd.relayCutoff !== (newCmdState === "CRITICAL")) {
+      if (!prevCmd || prevCmd.led !== cmdLed || prevCmd.buzzer !== cmdBuzzer || prevCmd.relayCutoff !== cmdRelay) {
         const newCmd = buildCommand(newCmdState as SafetyState | "OFFLINE", newStaleVersion, zone.id, openIncident?.id ?? null);
+        newCmd.buzzer = cmdBuzzer;
+        newCmd.relayCutoff = cmdRelay;
         await c.actuator_commands.insertOne(newCmd, { session });
         command = newCmd;
       } else {
