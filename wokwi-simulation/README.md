@@ -4,30 +4,25 @@ This folder contains the complete simulation for a Zone Node (ESP32) that perfec
 
 ## How to use this online
 
-Since Wokwi runs in the cloud and your backend is on your PC (`localhost:3000`), you need a bridge to connect them. **ngrok** is the easiest way.
+Since you have deployed your backend to Render, your backend is publicly available. We will connect the Wokwi ESP32 directly to your live Render server!
 
-### Step 1: Start your backend and ngrok
-1. Make sure your Next.js backend is running: `npm run dev`
-2. Open a new terminal and run ngrok: `ngrok http 3000`
-3. Ngrok will give you a public URL (e.g., `https://1234-abcd.ngrok-free.app`).
-
-### Step 2: Create the Wokwi Project
+### Step 1: Create the Wokwi Project
 1. Go to [wokwi.com](https://wokwi.com) and create a **New ESP32 Project**.
 2. Open the **`sketch.ino`** file from this folder, copy all the code, and paste it into the `sketch.ino` tab on Wokwi.
 3. Open the **`diagram.json`** file from this folder, copy all the code, and paste it into the `diagram.json` tab on Wokwi.
 4. Click on the `Library Manager` tab in Wokwi (the plus icon next to files) or create a `libraries.txt` file and add: `ArduinoJson`.
 
-### Step 3: Link the URL
-In your Wokwi `sketch.ino`, find this line at the top:
+### Step 2: Ensure the Render Link is Correct
+In your Wokwi `sketch.ino`, check that this line at the top has your exact Render URL:
 ```cpp
-const char* BACKEND_URL = "https://YOUR_NGROK_URL.ngrok-free.app"; 
+const char* BACKEND_URL = "https://robofusion-scs-rg-devtork-r1.onrender.com"; 
 ```
-Replace it with your actual Ngrok URL. Make sure there is **no trailing slash (`/`)** at the end of the URL.
+*(Make sure there is **no trailing slash (`/`)** at the end of the URL).*
 
-### Step 4: Run it!
+### Step 3: Run it!
 Click the Green Play button in Wokwi. 
 - You will see the ESP32 connect to WiFi.
-- It will start sending sensor data every 500ms.
+- It will start sending sensor data every 500ms to your Render server.
 - To simulate the 5 zones, you can duplicate this Wokwi project in a new tab, and simply change the `ZONE_CODE` variable at the top of the code (e.g., `"SERVER_ROOM"`, `"ROBOTICS_LAB"`).
 
 ## Testing the Sensors (PDF Requirements)
