@@ -257,9 +257,8 @@ void fetchCommands() {
 
 void setup() {
   Serial.begin(115200);
-  randomSeed(analogRead(0));
   bootId = "boot-";
-  for (int i = 0; i < 8; i++) bootId += String(random(0, 16), HEX);
+  for (int i = 0; i < 8; i++) bootId += String(esp_random() % 16, HEX);
 
   pinMode(PIN_FIRE, INPUT_PULLUP);
   pinMode(PIN_GAS, INPUT);
