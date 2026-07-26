@@ -23,10 +23,7 @@ async function reset() {
     id: `edge-${code}`, code, name: code.replaceAll("_", " "), configured: true,
     apiKeyHash: hashSecret(`${code}-demo-key`, env.ZONE_API_KEY_PEPPER),
     state: "SAFE" as const, riskScore: 0, primaryHazard: null, occupancy: false, cameraOccupancy: false,
-    connectivityState: "OFFLINE" as const,
-    lastReadingAt: null,
-    lastReceivedAt: null,
-    lastSequence: null, commandVersion: 0,
+    connectivityState: "OFFLINE" as const, lastReadingAt: null, lastSequence: null, commandVersion: 0,
     createdAt: now, updatedAt: now,
   })));
 }
@@ -37,7 +34,7 @@ function raw(code: string, sequence: number, values: { gas?: number; water?: num
     gas: values.gas ?? 1200, water: values.water ?? 0, pir: values.pir ?? false,
     sensorHealth: "HEALTHY" as const,
     sensorStatus: { fire: "ONLINE" as const, gas: "ONLINE" as const, water: "ONLINE" as const, pir: "ONLINE" as const },
-    deviceUptimeSeconds: 120, sampleIntervalMs: 200,
+    deviceUptimeSeconds: 120, sampleIntervalMs: 500,
   };
 }
 

@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { collections } from "../src/server/db/collections";
 import { id } from "../src/server/utils/id";
-import type { Reading } from "../src/server/types";
+import type { Reading, Incident, IncidentEvent } from "../src/server/types";
 
 async function main() {
   const c = await collections();
@@ -33,6 +33,7 @@ async function main() {
       observedAt: at,
       uptimeMs: (1000 + i) * 1000,
       sampleIntervalMs: 500,
+      clockSynchronized: true,
       fire: false,
       gas: gasRaw,
       water: waterRaw,
@@ -65,8 +66,8 @@ async function main() {
   }
 
   console.log(`\nSeeding representative incidents for performance tests...`);
-  const incidents = [];
-  const events = [];
+  const incidents: Omit<Incident, "_id">[] = [];
+  const events: Omit<IncidentEvent, "_id">[] = [];
   for (let i = 0; i < 200; i++) {
     const zone = zones[i % zones.length];
     const incidentId = id();

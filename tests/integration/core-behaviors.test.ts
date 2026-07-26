@@ -31,13 +31,8 @@ async function resetAndSeed() {
     await c.zones.insertOne({
       id: `id-${code}`, code, name, configured: true,
       apiKeyHash: hashSecret(`${code}-demo-key`, env.ZONE_API_KEY_PEPPER),
-      state: "SAFE", riskScore: 0, primaryHazard: null, occupancy: false,
-      cameraOccupancy: false,
-      connectivityState: "OFFLINE",
-      lastReadingAt: null,
-      lastReceivedAt: null,
-      lastSequence: null,
-      commandVersion: 0,
+      state: "SAFE", riskScore: 0, primaryHazard: null, occupancy: false, cameraOccupancy: false,
+      connectivityState: "OFFLINE", lastReadingAt: null, lastSequence: null, commandVersion: 0,
       createdAt: now(), updatedAt: now(),
     });
   }
@@ -55,7 +50,7 @@ function reading(sequence: number, values: Partial<Parameters<typeof ingest>[2]>
     sensorHealth: "HEALTHY",
     sensorStatus: { fire: "ONLINE", gas: "ONLINE", water: "ONLINE", pir: "ONLINE" },
     deviceUptimeSeconds: 120,
-    sampleIntervalMs: 200,
+    sampleIntervalMs: 500,
     ...values,
   };
 }
@@ -97,22 +92,20 @@ describe.sequential("core backend/hardware semantics", () => {
     expect((await c.readings.findOne({ zoneId: "id-IOT_LAB" }))?.isWarmingUp).toBe(true);
   });
 
-  it("requires five flame samples and ignores a shorter flicker", async () => {
-    for (let sequence = 1; sequence <= 4; sequence++) {
-      const result = await ingest("IOT_LAB", "IOT_LAB-demo-key", reading(sequence, { fire: true }));
-      expect(result.zone.safety_state).toBe("SAFE");
-    }
-    const fifth = await ingest("IOT_LAB", "IOT_LAB-demo-key", reading(5, { fire: true }));
-    expect(fifth.zone.safety_state).toBe("CRITICAL");
+  it("requires two 500 ms flame samples and ignores a shorter flicker", async () => {
+    const flicker = await ingest("IOT_LAB", "IOT_LAB-demo-key", reading(1, { fire: true }));
+    expect(flicker.zone.safety_state).toBe("SAFE");
+    const sustained = await ingest("IOT_LAB", "IOT_LAB-demo-key", reading(2, { fire: true }));
+    expect(sustained.zone.safety_state).toBe("CRITICAL");
     const c = await collections();
     expect((await c.zone_states.findOne({ zoneId: "id-IOT_LAB" }))?.fireConfirmed).toBe(true);
   });
 
   it("resets the fire debounce counter after a confirmed flame clears", async () => {
-    for (let sequence = 1; sequence <= 10; sequence++) {
+    for (let sequence = 1; sequence <= 2; sequence++) {
       await ingest("IOT_LAB", "IOT_LAB-demo-key", reading(sequence, { fire: true }));
     }
-    for (let sequence = 11; sequence <= 13; sequence++) {
+    for (let sequence = 3; sequence <= 4; sequence++) {
       await ingest("IOT_LAB", "IOT_LAB-demo-key", reading(sequence, { fire: false }));
     }
     const c = await collections();
@@ -120,7 +113,7 @@ describe.sequential("core backend/hardware semantics", () => {
     expect(state?.fireConfirmed).toBe(false);
     expect(state?.firePositiveCount).toBe(0);
 
-    await ingest("IOT_LAB", "IOT_LAB-demo-key", reading(14, { fire: true }));
+    await ingest("IOT_LAB", "IOT_LAB-demo-key", reading(5, { fire: true }));
     state = await c.zone_states.findOne({ zoneId: "id-IOT_LAB" });
     expect(state?.fireConfirmed).toBe(false);
     expect(state?.firePositiveCount).toBe(1);

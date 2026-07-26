@@ -20,10 +20,7 @@ async function main() {
     id: "race-zone", code: "IOT_LAB", name: "IoT Lab", configured: true,
     apiKeyHash: hashSecret("IOT_LAB-demo-key", env.ZONE_API_KEY_PEPPER),
     state: "SAFE", riskScore: 0, primaryHazard: null, occupancy: false, cameraOccupancy: false,
-    connectivityState: "OFFLINE",
-    lastReadingAt: null,
-    lastReceivedAt: null,
-    lastSequence: null, commandVersion: 0,
+    connectivityState: "OFFLINE", lastReadingAt: null, lastSequence: null, commandVersion: 0,
     createdAt: now, updatedAt: now,
   });
   await c.users.insertMany([
@@ -35,7 +32,7 @@ async function main() {
     bootId: "race-boot", sequence, timestamp: new Date(), fire: false, gas: 4095, water: 0, pir: true,
     sensorHealth: "HEALTHY" as const,
     sensorStatus: { fire: "ONLINE" as const, gas: "ONLINE" as const, water: "ONLINE" as const, pir: "ONLINE" as const },
-    deviceUptimeSeconds: 120, sampleIntervalMs: 200,
+    deviceUptimeSeconds: 120, sampleIntervalMs: 500,
   });
   await ingest("IOT_LAB", "IOT_LAB-demo-key", payload(1));
   await ingest("IOT_LAB", "IOT_LAB-demo-key", payload(2));

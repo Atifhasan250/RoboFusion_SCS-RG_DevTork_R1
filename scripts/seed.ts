@@ -16,7 +16,7 @@ const ZONES = [
 const SENSOR_DEFAULTS: Array<Omit<SensorCalibration, "_id" | "id" | "zoneId" | "createdAt" | "updatedAt">> = [
   {
     sensorType: "FIRE", rawMin: 0, rawMax: 1, baselineRaw: 0, criticalRaw: 1,
-    direction: "ASCENDING", warmupSeconds: 0, debounceCount: 5,
+    direction: "ASCENDING", warmupSeconds: 0, debounceCount: 2,
     isRequired: true, isEnabled: true, status: "OFFLINE", lastSeenAt: null,
   },
   {
@@ -121,16 +121,20 @@ async function main() {
     );
 
     for (const sensor of SENSOR_DEFAULTS) {
+      const { status, lastSeenAt, ...calibration } = sensor;
       await c.sensors.updateOne(
         { zoneId: zone.id, sensorType: sensor.sensorType },
         {
+          // Update static calibration without erasing live health on every deploy.
           $set: {
-            ...sensor,
+            ...calibration,
             updatedAt: now,
           },
           $setOnInsert: {
             id: id(),
             zoneId: zone.id,
+            status,
+            lastSeenAt,
             createdAt: now,
           },
         },
@@ -174,7 +178,7 @@ async function main() {
     if (Object.keys(patch).length) await c.zone_states.updateOne({ zoneId: state.zoneId }, { $set: patch });
   }
 
-  const password = process.env.DEMO_PASSWORD ?? "ChangeMe123!";
+  const password = process.env.DEMO_PASSWORD ?? "scs-grid";
   const users = [
     ["admin@scs.local", "Campus Admin", "ADMIN"],
     ["staff@scs.local", "Security Staff", "SECURITY_STAFF"],
