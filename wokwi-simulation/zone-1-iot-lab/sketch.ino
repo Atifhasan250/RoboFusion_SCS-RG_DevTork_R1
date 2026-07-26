@@ -127,8 +127,9 @@ bool sendPostRequest(const String& requestBody, bool isQueued) {
         && !response["command"].isNull()) {
       processCommand(response["command"].as<JsonVariantConst>());
     }
-  } else if (!success && code > 0) {
-    Serial.printf("Reading API error %d: %s\n", code, http.getString().c_str());
+  } else if (!success) {
+    if (code > 0) Serial.printf("Reading API error %d: %s\n", code, http.getString().c_str());
+    else Serial.printf("Reading API connection failed (code %d)\n", code);
   }
   http.end();
   return success;
@@ -146,7 +147,10 @@ String replayPayload(const String& original, bool lastInBatch) {
 
 String getTimestamp() {
   struct tm timeinfo;
-  if (!getLocalTime(&timeinfo, 100)) return "";
+  if (!getLocalTime(&timeinfo, 100)) {
+    Serial.println("NTP sync pending... backend will assign server time temporarily.");
+    return "";
+  }
   char value[32];
   strftime(value, sizeof(value), "%Y-%m-%dT%H:%M:%SZ", &timeinfo);
   return String(value);
@@ -154,8 +158,7 @@ String getTimestamp() {
 
 void sendReadings() {
   String timestamp = getTimestamp();
-  if (timestamp.length() == 0) return;
-
+  
   int rawMotion = digitalRead(PIN_MOTION);
   if (rawMotion == HIGH) {
     if (pirHighStart == 0) pirHighStart = millis();
@@ -244,7 +247,7 @@ void setup() {
   while (WiFi.status() != WL_CONNECTED && millis() - started < 15000) delay(250);
   if (WiFi.status() == WL_CONNECTED) Serial.println("WiFi connected");
   else Serial.println("WiFi unavailable; sampling will start after reconnection and time sync");
-  configTime(0, 0, "pool.ntp.org");
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov", "time.google.com");
 }
 
 void loop() {

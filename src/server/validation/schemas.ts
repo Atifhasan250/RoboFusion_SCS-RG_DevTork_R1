@@ -8,8 +8,8 @@ export const readingSchema = z.object({
   bootId: z.string().min(1).max(64).default("default"),
   /** Monotonically increasing sequence number per boot. */
   sequence: z.number().int().nonnegative(),
-  /** ISO timestamp of sensor observation. */
-  timestamp: z.coerce.date().refine(
+  /** ISO timestamp of sensor observation. Gracefully fallback to server time if client NTP fails. */
+  timestamp: z.coerce.date().catch(() => new Date()).refine(
     date => date.getTime() <= Date.now() + 30_000,
     { message: "Timestamp cannot be more than 30 seconds in the future" },
   ),
