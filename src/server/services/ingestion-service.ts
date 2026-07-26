@@ -514,7 +514,7 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload): Pr
           hazard: calculatedRisk.primaryHazard,
         };
         await c.incidents.insertOne(newIncident, { session });
-        activeIncident = newIncident as Incident;
+        activeIncident = newIncident as any;
         incidentOpened = true;
         await c.incident_events.insertOne(buildEvent(
           "INCIDENT_OPENED",
