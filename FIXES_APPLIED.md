@@ -1,0 +1,23 @@
+# Final Alignment Fixes
+
+- Replaced hardcoded frontend priority data, incident durations, timelines, trends and predictions with authenticated backend data.
+- Added one authoritative dashboard snapshot shared by REST, WebSocket and SSE.
+- Added WebSocket reconnect, two-second REST fallback and periodic consistency refresh.
+- Made connectivity explicit (`ONLINE/DEGRADED/OFFLINE`) without overwriting last-known safety.
+- Integrated real incident query filters and durable timeline endpoint.
+- Fixed Admin override clearing to use the backend DELETE contract.
+- Restored CSRF token through `/auth/me` after page reload.
+- Added actual priority score/reason display and acknowledgment attention clearing.
+- Added real zone sensor health, events, trend, trained ML prediction and Admin raw readings.
+- Changed Wokwi to 500 ms telemetry and five-second command fallback, reducing five-zone HTTPS load from roughly 45 requests/s to roughly 10 requests/s.
+- Bounded cached replay to three samples per live cycle.
+- Changed backend liveness to server receipt time and default 20-second threshold.
+- Allowed receipt-time fallback until Wokwi NTP synchronization completes.
+- Updated sustained-fire debounce to two 500 ms samples and aligned seed/tests/docs.
+- Re-trained the Bonus 3 logistic model on deterministic synthetic time-series with held-out metrics and positive fire/gas/water/occupancy/trend coefficients.
+- Added Render deployment configuration, complete README, circuit pinouts, PDF alignment checklist and seven-minute video runbook.
+- Added Next.js rewrites so direct links and browser refreshes for `/priority`, `/zones/*`, `/incidents/*`, `/reports` and `/system-health` correctly load the client router instead of returning 404.
+- Dashboard snapshots now calculate fresh advisory ML predictions from recent authoritative sensor history; predictions stay separate from live risk and cannot actuate hardware.
+- Made database seeding idempotent without resetting live sensor health or `lastSeenAt` during each Render restart/deploy.
+- Changed Wokwi reconnect behavior to send the newest live reading first, then replay at most three cached historical readings, preventing stale cache drain from delaying online recovery.
+- Corrected every Wokwi diagram to boot in a safe/healthy state: active-low flame, occupancy cross-check and sensor-fault switches now start open, and the relay simulation polarity now matches the firmware cutoff command.
