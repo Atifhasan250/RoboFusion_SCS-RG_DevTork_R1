@@ -11,14 +11,51 @@ export async function GET(_: Request, ctx: { params: Promise<{ zoneCode: string 
     const user = await requireUser();
     const { zoneCode } = await ctx.params;
     const c = await collections();
-    const zone = await c.zones.findOne({ code: zoneCode }, { projection: { _id: 0, apiKeyHash: 0 } });
+    const zone = await c.zones.findOne({ code: zoneCode, configured: true }, { projection: { _id: 0, apiKeyHash: 0 } });
     if (!zone) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
-    const readings = user.role === "ADMIN"
-      ? await c.readings.find({ zoneId: zone.id }, { projection: { _id: 0 } }).sort({ observedAt: -1 }).limit(50).toArray()
-      : [];
-    return NextResponse.json({ zone, readings });
+
+    const { riskTrend } = await import("@/src/server/services/trend-service");
+    const { calculateZonePrediction } = await import("@/src/server/services/prediction-service");
+    const [state, sensors, events, trend, prediction, readings] = await Promise.all([
+      c.zone_states.findOne({ zoneId: zone.id }, { projection: { _id: 0 } }),
+      c.sensors.find({ zoneId: zone.id, isEnabled: true }, { projection: { _id: 0 } }).sort({ sensorType: 1 }).toArray(),
+      c.incident_events.find({ zoneId: zone.id }, { projection: { _id: 0 } }).sort({ occurredAt: -1 }).limit(25).toArray(),
+      riskTrend(zone.id),
+      calculateZonePrediction(zone.id, true),
+      user.role === "ADMIN"
+        ? c.readings.find({ zoneId: zone.id }, { projection: { _id: 0 } }).sort({ observedAt: -1 }).limit(50).toArray()
+        : Promise.resolve([]),
+    ]);
+
+    return NextResponse.json({
+      zone: {
+        ...zone,
+        state: state?.safetyState ?? zone.state,
+        connectivityState: state?.connectivityState ?? zone.connectivityState,
+        riskScore: state?.riskScore ?? zone.riskScore,
+        primaryHazard: state?.primaryHazard ?? zone.primaryHazard ?? "NONE",
+        occupancy: state?.occupied ?? zone.occupancy,
+        riskComponents: state?.riskComponents ?? { fire: 0, gas: 0, water: 0, occupancy: 0 },
+        recentRiskScores: state?.recentRiskScores ?? [],
+        isTrendingCritical: state?.isTrendingCritical ?? false,
+        warningSince: state?.warningSince ?? null,
+        criticalSince: state?.criticalSince ?? null,
+        lastObservedAt: state?.lastObservedAt ?? null,
+        lastReceivedAt: state?.lastReceivedAt ?? zone.lastReadingAt ?? null,
+      },
+      sensors,
+      events,
+      trend,
+      prediction,
+      readings,
+      raw_readings_visible: user.role === "ADMIN",
+      prediction_safety: "Prediction is advisory only and cannot issue physical actuator commands.",
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof AuthError ? error.code : "ERROR" }, { status: error instanceof AuthError ? error.status : 500 });
+    return NextResponse.json(
+      { error: error instanceof AuthError ? error.code : "ERROR" },
+      { status: error instanceof AuthError ? error.status : 500 },
+    );
   }
 }
 

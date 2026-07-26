@@ -54,11 +54,16 @@ void enqueueReading(const String& payload) {
   queueCount++;
 }
 
-void beginSecure(HTTPClient& http, WiFiClientSecure& client, const String& url) {
-  client.setInsecure(); // Wokwi/demo transport. Production hardware should pin/verify the server CA.
-  http.begin(client, url);
+void beginSecure(HTTPClient& http, WiFiClientSecure& secureClient, WiFiClient& client, const String& url) {
+  if (url.startsWith("https://")) {
+    secureClient.setInsecure();
+    http.begin(secureClient, url);
+  } else {
+    http.begin(client, url);
+  }
   http.setConnectTimeout(8000);
   http.setTimeout(8000);
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
 }
 
 void ensureWiFiConnected() {
@@ -87,8 +92,9 @@ void applyActuators(bool buzzer, const char* leds, bool relay) {
 void acknowledgeCommand(const String& commandId) {
   if (WiFi.status() != WL_CONNECTED || commandId.length() == 0) return;
   HTTPClient http;
-  WiFiClientSecure client;
-  beginSecure(http, client, String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE);
+  WiFiClientSecure secureClient;
+  WiFiClient client;
+  beginSecure(http, secureClient, client, String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("x-zone-api-key", ZONE_API_KEY);
   StaticJsonDocument<128> body;
@@ -115,8 +121,9 @@ void processCommand(JsonVariantConst command) {
 bool sendPostRequest(const String& requestBody, bool isQueued) {
   if (WiFi.status() != WL_CONNECTED) return false;
   HTTPClient http;
-  WiFiClientSecure client;
-  beginSecure(http, client, String(BACKEND_URL) + "/api/v1/readings/" + ZONE_CODE);
+  WiFiClientSecure secureClient;
+  WiFiClient client;
+  beginSecure(http, secureClient, client, String(BACKEND_URL) + "/api/v1/readings/" + ZONE_CODE);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("x-zone-api-key", ZONE_API_KEY);
   int code = http.POST(requestBody);
@@ -128,8 +135,12 @@ bool sendPostRequest(const String& requestBody, bool isQueued) {
         && !response["command"].isNull()) {
       processCommand(response["command"].as<JsonVariantConst>());
     }
-  } else if (!success && code > 0) {
-    Serial.printf("Reading API error %d: %s\n", code, http.getString().c_str());
+  } else if (!success) {
+    if (code > 0) {
+      Serial.printf("Reading API error %d: %s\n", code, http.getString().c_str());
+    } else {
+      Serial.printf("Reading API connection failed, code %d: %s\n", code, http.errorToString(code).c_str());
+    }
   }
   http.end();
   return success;
@@ -218,8 +229,9 @@ void sendReadings() {
 void fetchCommands() {
   if (WiFi.status() != WL_CONNECTED) return;
   HTTPClient http;
-  WiFiClientSecure client;
-  beginSecure(http, client, String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE);
+  WiFiClientSecure secureClient;
+  WiFiClient client;
+  beginSecure(http, secureClient, client, String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE);
   http.addHeader("x-zone-api-key", ZONE_API_KEY);
   int code = http.GET();
   if (code == 200) {
