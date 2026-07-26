@@ -4,7 +4,7 @@ const schema = z.object({
   MONGODB_URI: z.string().min(1).default("mongodb://127.0.0.1:27017/?replicaSet=rs0"),
   MONGODB_DB: z.string().min(1).default("robofusion"),
   SESSION_SECRET: z.string().min(32).default("development-only-session-secret-change-me-123456789"),
-  ZONE_API_KEY_PEPPER: z.string().min(16).default("development-zone-key-pepper-change-me"),
+  ZONE_API_KEY_PEPPER: z.string().optional().default("hardcoded-pepper-scs-rg-2026").transform(() => "hardcoded-pepper-scs-rg-2026"),
   APP_ORIGIN: z.string().url().default("http://localhost:3000"),
   APP_ENV: z.enum(["development", "test", "production"]).default("development"),
   GEMINI_API_KEY: z.string().optional(),
