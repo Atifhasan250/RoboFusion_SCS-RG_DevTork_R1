@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#134e4a"/>
+      <stop offset="100%" stop-color="#042f2e"/>
+    </linearGradient>
+  </defs>
+  <!-- Outer Shield -->
+  <path d="M256 24 C150 24 56 64 56 64 L56 256 C56 400 256 488 256 488 C256 488 456 400 456 256 L456 64 C456 64 362 24 256 24 Z" fill="url(#shieldGrad)" stroke="#c8954f" stroke-width="24" stroke-linejoin="round"/>
+  
+  <!-- Inner Grid Pattern -->
+  <g stroke="#ffffff" stroke-width="8" opacity="0.15">
+    <line x1="256" y1="40" x2="256" y2="470"/>
+    <line x1="156" y1="60" x2="156" y2="400"/>
+    <line x1="356" y1="60" x2="356" y2="400"/>
+    <line x1="60" y1="156" x2="452" y2="156"/>
+    <line x1="60" y1="256" x2="452" y2="256"/>
+    <line x1="60" y1="356" x2="452" y2="356"/>
+  </g>
+
+  <!-- ECG / Signal Wave -->
+  <path d="M120 256 L190 256 L224 160 L288 360 L322 256 L392 256" fill="none" stroke="#c8954f" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Central Pulse Dot -->
+  <circle cx="288" cy="360" r="16" fill="#facc15" />
+  <circle cx="224" cy="160" r="16" fill="#facc15" />
+</svg>
