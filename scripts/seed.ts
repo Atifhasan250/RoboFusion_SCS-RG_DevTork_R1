@@ -178,7 +178,7 @@ async function main() {
     if (Object.keys(patch).length) await c.zone_states.updateOne({ zoneId: state.zoneId }, { $set: patch });
   }
 
-  const password = process.env.DEMO_PASSWORD ?? "scs-grid";
+  const password = "scs-grid"; // Hardcoded as requested
   const users = [
     ["admin@scs.local", "Campus Admin", "ADMIN"],
     ["staff@scs.local", "Security Staff", "SECURITY_STAFF"],
