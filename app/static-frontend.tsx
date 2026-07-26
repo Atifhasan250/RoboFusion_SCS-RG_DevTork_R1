@@ -69,8 +69,8 @@ import {
 type DisplayStatus = SafetyState | "ONLINE" | "OFFLINE" | "DEGRADED" | "NOT_CONFIGURED";
 type ThemeMode = "dark" | "light";
 
-const shell = "border border-white/[.09] bg-[#151917]/82 shadow-[0_24px_64px_rgba(0,0,0,.30)] backdrop-blur-2xl";
-const dataText = "font-['Inter'] tabular-nums text-[13px] tracking-[.02em]";
+const shell = "border border-[var(--border)] bg-[var(--surface-1)]/90 shadow-[0_16px_48px_rgba(0,0,0,.28)] backdrop-blur-xl";
+const dataText = "font-['JetBrains_Mono','IBM_Plex_Mono',monospace] tabular-nums text-[12px] tracking-[.01em]";
 
 const hazardLabels: Record<HazardType, string> = {
   FIRE: "Fire / flame",
@@ -80,14 +80,14 @@ const hazardLabels: Record<HazardType, string> = {
   NONE: "No active hazard",
 };
 
-const statusStyles: Record<DisplayStatus, { text: string; surface: string; icon: typeof CircleCheck }> = {
-  ONLINE: { text: "text-emerald-700 dark:text-emerald-300", surface: "bg-emerald-500/10 border-emerald-500/30", icon: Wifi },
-  SAFE: { text: "text-[#b1c9a8]", surface: "border-[#88a879]/25 bg-[#88a879]/[.09]", icon: CircleCheck },
-  WARNING: { text: "text-[#d8ae71]", surface: "border-[#c8954f]/25 bg-[#c8954f]/[.10]", icon: AlertTriangle },
-  CRITICAL: { text: "text-[#de8b7d]", surface: "border-[#b95045]/35 bg-[#b95045]/[.12]", icon: ShieldAlert },
-  DEGRADED: { text: "text-[#d8ae71]", surface: "border-[#c8954f]/25 bg-[#c8954f]/[.10]", icon: CircleAlert },
-  OFFLINE: { text: "text-[#8f99a5]", surface: "border-[#69727c]/30 bg-[#69727c]/[.10]", icon: WifiOff },
-  NOT_CONFIGURED: { text: "text-[#8f99a5]", surface: "border-[#69727c]/30 bg-[#69727c]/[.10]", icon: CloudOff },
+const statusStyles: Record<DisplayStatus, { text: string; surface: string; stripe: string; icon: typeof CircleCheck }> = {
+  ONLINE:         { text: "text-[var(--safe-ink)]",     surface: "border-[var(--safe-border)]     bg-[var(--safe-surface)]",     stripe: "bg-[var(--risk-safe)]",     icon: Wifi },
+  SAFE:           { text: "text-[var(--safe-ink)]",     surface: "border-[var(--safe-border)]     bg-[var(--safe-surface)]",     stripe: "bg-[var(--risk-safe)]",     icon: CircleCheck },
+  WARNING:        { text: "text-[var(--warning-ink)]",  surface: "border-[var(--warning-border)]  bg-[var(--warning-surface)]",  stripe: "bg-[var(--risk-warning)]",  icon: AlertTriangle },
+  CRITICAL:       { text: "text-[var(--critical-ink)]", surface: "border-[var(--critical-border)] bg-[var(--critical-surface)]", stripe: "bg-[var(--risk-critical)]", icon: ShieldAlert },
+  DEGRADED:       { text: "text-[var(--warning-ink)]",  surface: "border-[var(--warning-border)]  bg-[var(--warning-surface)]",  stripe: "bg-[var(--risk-warning)]",  icon: CircleAlert },
+  OFFLINE:        { text: "text-[var(--offline-ink)]",  surface: "border-[var(--offline-border)]  bg-[var(--offline-surface)]",  stripe: "bg-[var(--risk-offline)]",  icon: WifiOff },
+  NOT_CONFIGURED: { text: "text-[var(--offline-ink)]",  surface: "border-[var(--offline-border)]  bg-[var(--offline-surface)]",  stripe: "bg-[var(--risk-offline)]",  icon: CloudOff },
 };
 
 function displayStatus(zone: DashboardZone): DisplayStatus {
@@ -172,8 +172,8 @@ function StatusBadge({ status, compact = false }: { status: DisplayStatus; compa
   const tone = statusStyles[status];
   const Icon = tone.icon;
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${tone.surface} ${tone.text} ${dataText} ${compact ? "text-[11px]" : "text-[12px]"}`}>
-      <Icon size={compact ? 11 : 13} strokeWidth={2.1} />
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-[3px] ${tone.surface} ${tone.text} ${dataText} ${compact ? "text-[10px]" : "text-[11px]"} font-medium`}>
+      <Icon size={compact ? 10 : 12} strokeWidth={2.2} />
       {status.replace("_", " ")}
     </span>
   );
@@ -196,12 +196,12 @@ function RiskRing({ value, status }: { value: number; status: DisplayStatus }) {
         : "var(--risk-safe)";
   return (
     <div
-      className="relative grid size-[58px] place-items-center rounded-full"
+      className="relative grid size-[54px] place-items-center rounded-full"
       style={{ background: `conic-gradient(${color} ${clamped * 3.6}deg, var(--risk-track) 0deg)` }}
       aria-label={`Risk score ${value}`}
     >
-      <div className="grid size-[46px] place-items-center rounded-full bg-[#171a1d]">
-        <span className={`${dataText} text-[14px] ${tone.text}`}>{status === "OFFLINE" ? "—" : Math.round(value)}</span>
+      <div className="grid size-[42px] place-items-center rounded-full" style={{ background: "var(--surface-1)" }}>
+        <span className={`${dataText} text-[13px] font-medium ${tone.text}`}>{status === "OFFLINE" ? "—" : Math.round(value)}</span>
       </div>
     </div>
   );
@@ -213,7 +213,7 @@ function IconButton({ label, children, onClick }: { label: string; children: Rea
       aria-label={label}
       title={label}
       onClick={onClick}
-      className="grid size-9 place-items-center rounded-xl border border-white/[.075] bg-white/[.025] text-[#aeb5ba] transition hover:border-white/[.15] hover:bg-white/[.07] hover:text-white"
+      className="grid size-8 place-items-center rounded-lg border border-[var(--border)] bg-[var(--surface-2)] text-[var(--ink-3)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-3)] hover:text-[var(--foreground)]"
     >
       {children}
     </button>
@@ -222,10 +222,10 @@ function IconButton({ label, children, onClick }: { label: string; children: Rea
 
 function LoadingBlock({ label = "Synchronizing command data…" }: { label?: string }) {
   return (
-    <div className={`${shell} flex min-h-[240px] items-center justify-center rounded-2xl`}>
-      <div className="text-center text-[#9ba2a3]">
-        <RefreshCw className="mx-auto animate-spin" size={20} />
-        <p className="mt-3 text-[13px]">{label}</p>
+    <div className={`${shell} flex min-h-[240px] items-center justify-center rounded-xl`}>
+      <div className="text-center text-[var(--ink-3)]">
+        <RefreshCw className="mx-auto animate-spin text-[var(--primary)]" size={18} />
+        <p className="mt-3 text-[12px]">{label}</p>
       </div>
     </div>
   );
@@ -233,10 +233,10 @@ function LoadingBlock({ label = "Synchronizing command data…" }: { label?: str
 
 function EmptyState({ title, body }: { title: string; body: string }) {
   return (
-    <div className={`${shell} rounded-2xl px-6 py-14 text-center`}>
-      <CircleAlert className="mx-auto text-[#8c9495]" size={22} />
-      <p className="mt-3 text-[15px] font-medium">{title}</p>
-      <p className="mx-auto mt-2 max-w-lg text-[13px] leading-6 text-[#828a8d]">{body}</p>
+    <div className={`${shell} rounded-xl px-6 py-14 text-center`}>
+      <CircleAlert className="mx-auto text-[var(--ink-4)]" size={20} />
+      <p className="mt-3 text-[14px] font-medium text-[var(--foreground)]">{title}</p>
+      <p className="mx-auto mt-2 max-w-lg text-[12px] leading-6 text-[var(--ink-3)]">{body}</p>
     </div>
   );
 }
@@ -245,9 +245,9 @@ function PageIntro({ eyebrow, title, children, action }: { eyebrow: string; titl
   return (
     <header className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
       <div>
-        <p className={`${dataText} text-[11px] tracking-[.18em] text-[#c8954f]`}>{eyebrow}</p>
-        <h1 className="mt-2 font-['Manrope'] text-3xl font-medium tracking-[-.035em]">{title}</h1>
-        {children ? <div className="mt-2 text-[13px] leading-6 text-[#8f9797]">{children}</div> : null}
+        <p className={`${dataText} text-[10px] tracking-[.2em] text-[var(--primary)] uppercase`}>{eyebrow}</p>
+        <h1 className="mt-2 font-['IBM_Plex_Mono',monospace] text-2xl font-semibold tracking-tight text-[var(--foreground)]">{title}</h1>
+        {children ? <div className="mt-2 text-[12px] leading-6 text-[var(--ink-3)]">{children}</div> : null}
       </div>
       {action}
     </header>
@@ -260,12 +260,12 @@ function ThemeToggle({ theme, setTheme }: { theme: ThemeMode; setTheme: (theme: 
     <button
       onClick={() => setTheme(light ? "dark" : "light")}
       aria-label={`Switch to ${light ? "dark" : "light"} theme`}
-      className="group flex h-9 items-center gap-2 rounded-xl border border-white/[.10] bg-white/[.035] px-2.5 text-[#c9ccc4] transition hover:border-[#c8954f]/45 hover:bg-[#c8954f]/[.08]"
+      className="group flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2.5 text-[var(--ink-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--foreground)]"
     >
-      <span className="grid size-5 place-items-center rounded-md bg-[#c8954f]/[.13] text-[#dfba7c]">
-        {light ? <Moon size={13} /> : <Sun size={14} />}
+      <span className="grid size-4 place-items-center text-[var(--primary)]">
+        {light ? <Moon size={12} /> : <Sun size={12} />}
       </span>
-      <span className={`${dataText} hidden text-[11px] tracking-[.08em] sm:block`}>{light ? "DARK" : "LIGHT"}</span>
+      <span className={`${dataText} hidden text-[10px] tracking-[.1em] sm:block`}>{light ? "DARK" : "LIGHT"}</span>
     </button>
   );
 }
@@ -297,52 +297,66 @@ function Login() {
   };
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#0b0e0c] px-5 text-[#e8e7e3] [.theme-light_&]:!bg-[#F6F8FB]">
+    <main className="min-h-screen overflow-hidden px-5" style={{ background: "var(--background)", color: "var(--foreground)" }}>
       <div className="absolute right-5 top-5 z-10"><ThemeToggle theme={theme} setTheme={setTheme} /></div>
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_18%_14%,rgba(172,124,63,.12),transparent_26%),radial-gradient(circle_at_82%_82%,rgba(101,130,109,.11),transparent_31%)]" />
+      <div className="pointer-events-none fixed inset-0" style={{ backgroundImage: "radial-gradient(ellipse 55% 45% at 15% 10%, rgba(0,217,126,0.05), transparent), radial-gradient(ellipse 40% 50% at 85% 90%, rgba(0,217,126,0.03), transparent)" }} />
       <div className="relative mx-auto grid min-h-screen max-w-6xl items-center gap-12 lg:grid-cols-[1.1fr_.9fr]">
         <section className="max-w-xl">
-          <div className="mb-12 flex items-center gap-3">
-            <div className="grid size-10 place-items-center rounded-xl border border-[#c8954f]/30 bg-[#c8954f]/10 text-[#e3bd82]"><ShieldCheck size={20} /></div>
-            <div><p className={`${dataText} text-[#d9d6cf]`}>SCS—RG</p><p className="text-[13px] tracking-[.14em] text-[#767d83]">CAMPUS SAFETY GRID</p></div>
+          <div className="mb-10 flex items-center gap-3">
+            <div className="grid size-10 place-items-center rounded-lg border" style={{ borderColor: "var(--primary-border)", background: "var(--primary-dim)", color: "var(--primary)" }}><ShieldCheck size={19} /></div>
+            <div>
+              <p className={`${dataText} font-semibold text-[13px]`} style={{ color: "var(--foreground)" }}>SCS — RG</p>
+              <p className={`${dataText} text-[10px] tracking-[.18em] mt-0.5`} style={{ color: "var(--ink-3)" }}>CAMPUS SAFETY GRID</p>
+            </div>
           </div>
-          <p className={`${dataText} text-[13px] tracking-[.2em] text-[#c8954f]`}>SECURE OPERATIONS ACCESS</p>
-          <h1 className="mt-4 max-w-md font-['Manrope'] text-4xl font-medium leading-[1.12] tracking-[-.035em] sm:text-5xl">Safety is a live system.</h1>
-          <p className="mt-6 max-w-md text-sm leading-7 text-[#9ba1a4]">Authenticate to monitor five independent lab zones, rank simultaneous incidents and coordinate response from one source of truth.</p>
-          <div className="mt-10 flex flex-wrap gap-5 text-[12px] text-[#858d8e]"><span className="flex items-center gap-2"><ShieldCheck size={13} />Backend-enforced RBAC</span><span className="flex items-center gap-2"><Radio size={13} />WebSocket + polling recovery</span></div>
+          <p className={`${dataText} text-[10px] tracking-[.22em] uppercase`} style={{ color: "var(--primary)" }}>Secure Operations Access</p>
+          <h1 className="mt-3 max-w-md font-['IBM_Plex_Mono',monospace] text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl" style={{ color: "var(--foreground)" }}>Safety is a<br />live system.</h1>
+          <p className="mt-5 max-w-md text-[13px] leading-7" style={{ color: "var(--ink-3)" }}>Monitor five independent lab zones, rank simultaneous incidents and coordinate response from one source of truth.</p>
+          <div className="mt-8 flex flex-wrap gap-5 text-[11px]" style={{ color: "var(--ink-4)" }}>
+            <span className="flex items-center gap-1.5"><ShieldCheck size={12} />Backend-enforced RBAC</span>
+            <span className="flex items-center gap-1.5"><Radio size={12} />WebSocket + polling recovery</span>
+          </div>
         </section>
 
-        <section className={`${shell} rounded-[28px] p-7 sm:p-9`}>
-          <p className={`${dataText} text-[12px] tracking-[.18em] text-[#a4aaa8]`}>OPERATOR IDENTITY</p>
-          <h2 className="mt-3 font-['Manrope'] text-2xl font-medium tracking-[-.025em]">Enter the grid</h2>
-          <div className="mt-7 grid grid-cols-2 gap-2 rounded-2xl border border-white/[.07] bg-black/10 p-1.5">
+        <section className={`${shell} rounded-xl p-7 sm:p-8`}>
+          <p className={`${dataText} text-[10px] tracking-[.18em] uppercase`} style={{ color: "var(--ink-3)" }}>Operator Identity</p>
+          <h2 className="mt-2 font-['IBM_Plex_Mono',monospace] text-xl font-semibold tracking-tight" style={{ color: "var(--foreground)" }}>Enter the grid</h2>
+          <div className="mt-6 grid grid-cols-2 gap-1.5 rounded-lg p-1" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
             {(["SECURITY_STAFF", "ADMIN"] as const).map(item => (
               <button
                 key={item}
                 onClick={() => setRole(item)}
-                className={`rounded-xl px-3 py-3 text-left text-[14px] transition ${role === item ? "bg-[#d6d1c5] text-[#10120f] shadow-sm" : "text-[#8d9499] hover:bg-white/[.05] hover:text-white"}`}
+                className="rounded-md px-3 py-2.5 text-left text-[13px] transition-all"
+                style={role === item
+                  ? { background: "var(--surface-1)", color: "var(--foreground)", boxShadow: "0 1px 3px rgba(0,0,0,0.2)", border: "1px solid var(--border-strong)" }
+                  : { color: "var(--ink-3)", border: "1px solid transparent" }}
               >
                 <span className="block font-medium">{item === "ADMIN" ? "Admin" : "Security Staff"}</span>
-                <span className="mt-1 block text-[12px] opacity-65">{item === "ADMIN" ? "Override and system health" : "Monitor and acknowledge"}</span>
+                <span className="mt-0.5 block text-[11px] opacity-65">{item === "ADMIN" ? "Override + system health" : "Monitor + acknowledge"}</span>
               </button>
             ))}
           </div>
-          <label className="mt-6 block text-[12px] tracking-[.1em] text-[#92999b]">
-            CAMPUS EMAIL
-            <input value={email} onChange={event => setEmail(event.target.value)} className="mt-2 w-full rounded-xl border border-white/[.09] bg-black/10 px-4 py-3 text-[14px] text-white outline-none focus:border-[#c8954f]/45" />
+          <label className={`mt-5 block ${dataText} text-[10px] tracking-[.12em] uppercase`} style={{ color: "var(--ink-3)" }}>
+            Campus Email
+            <input value={email} onChange={event => setEmail(event.target.value)} className="mt-2 w-full rounded-lg px-4 py-2.5 text-[13px] outline-none transition-colors" style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--foreground)" }} />
           </label>
-          <label className="mt-4 block text-[12px] tracking-[.1em] text-[#92999b]">
-            PASSWORD
+          <label className={`mt-4 block ${dataText} text-[10px] tracking-[.12em] uppercase`} style={{ color: "var(--ink-3)" }}>
+            Password
             <span className="relative mt-2 block">
-              <input type={showPassword ? "text" : "password"} value={password} onChange={event => setPassword(event.target.value)} onKeyDown={event => event.key === "Enter" && void submit()} className="w-full rounded-xl border border-white/[.09] bg-black/10 px-4 py-3 pr-12 text-[14px] text-white outline-none focus:border-[#c8954f]/45" />
-              <button type="button" onClick={() => setShowPassword(value => !value)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8f9797]">{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button>
+              <input type={showPassword ? "text" : "password"} value={password} onChange={event => setPassword(event.target.value)} onKeyDown={event => event.key === "Enter" && void submit()} className="w-full rounded-lg px-4 py-2.5 pr-11 text-[13px] outline-none transition-colors" style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--foreground)" }} />
+              <button type="button" onClick={() => setShowPassword(value => !value)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: "var(--ink-3)" }}>{showPassword ? <EyeOff size={15} /> : <Eye size={15} />}</button>
             </span>
           </label>
-          <button disabled={loading || !email || password.length < 8} onClick={() => void submit()} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#d6d1c5] py-3.5 text-[14px] font-medium text-[#10120f] transition hover:bg-white disabled:opacity-50">
-            {loading ? <RefreshCw className="animate-spin" size={16} /> : <ShieldCheck size={16} />}
+          <button
+            disabled={loading || !email || password.length < 8}
+            onClick={() => void submit()}
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg py-3 text-[13px] font-semibold transition-all disabled:opacity-40"
+            style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
+          >
+            {loading ? <RefreshCw className="animate-spin" size={14} /> : <ShieldCheck size={14} />}
             {loading ? "Authenticating…" : "Authenticate"}
           </button>
-          <p className="mt-4 text-center text-[11px] leading-5 text-[#737b7e]">Demo credentials are seeded from <code>DEMO_PASSWORD</code>. The selected role changes the actual account used.</p>
+          <p className={`mt-4 text-center ${dataText} text-[10px] leading-5`} style={{ color: "var(--ink-4)" }}>Demo credentials seeded from <code>DEMO_PASSWORD</code>. Role selection changes the account.</p>
         </section>
       </div>
     </main>
@@ -362,57 +376,95 @@ function AppShell() {
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [theme, setTheme] = useThemeMode();
 
-  if (!authChecked) return <main className="min-h-screen bg-[#0b0e0c] p-6 text-white"><LoadingBlock label="Checking secure session…" /></main>;
+  if (!authChecked) return <main className="min-h-screen p-6" style={{ background: "var(--background)" }}><LoadingBlock label="Checking secure session…" /></main>;
   if (!user) return <Navigate to="/login" replace />;
 
   const openAttention = activeIncidents.filter(incident => incident.status === "OPEN").length;
-  const connectionTone = wsStatus === "CONNECTED" ? "text-[#b4cdaa]" : wsStatus === "RECONNECTING" || wsStatus === "CONNECTING" ? "text-[#d8ae71]" : "text-[#de8b7d]";
+  const connectionColor = wsStatus === "CONNECTED" ? "var(--risk-safe)" : wsStatus === "RECONNECTING" || wsStatus === "CONNECTING" ? "var(--risk-warning)" : "var(--risk-critical)";
 
   return (
-    <div className="min-h-screen bg-[#0b0e0c] text-[#e8e7e3] [.theme-light_&]:!bg-[#F6F8FB]">
-      <aside className={`fixed inset-y-0 left-0 z-50 w-[255px] border-r border-white/[.07] bg-[#0e1210]/98 p-4 backdrop-blur-xl transition-transform lg:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="flex items-center justify-between px-2 py-2">
-          <NavLink to="/" onClick={() => setMobileOpen(false)} className="flex items-center gap-3">
-            <span className="grid size-9 place-items-center rounded-xl border border-[#c8954f]/30 bg-[#c8954f]/10 text-[#e3bd82]"><ShieldCheck size={18} /></span>
-            <span><span className={`${dataText} block text-[#dedbd4]`}>SCS—RG</span><span className="block text-[10px] tracking-[.16em] text-[#777f82]">COMMAND GRID</span></span>
+    <div className="min-h-screen" style={{ background: "var(--background)", color: "var(--foreground)" }}>
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-[248px] p-4 backdrop-blur-xl transition-transform lg:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
+        style={{ borderRight: "1px solid var(--border)", background: "var(--sidebar)" }}
+      >
+        <div className="flex items-center justify-between px-2 py-1.5">
+          <NavLink to="/" onClick={() => setMobileOpen(false)} className="flex items-center gap-2.5">
+            <span className="grid size-8 place-items-center rounded-lg" style={{ border: "1px solid var(--primary-border)", background: "var(--primary-dim)", color: "var(--primary)" }}><ShieldCheck size={16} /></span>
+            <span>
+              <span className={`${dataText} block text-[13px] font-semibold`} style={{ color: "var(--foreground)" }}>SCS—RG</span>
+              <span className={`${dataText} block text-[9px] tracking-[.2em] mt-0.5`} style={{ color: "var(--ink-4)" }}>COMMAND GRID</span>
+            </span>
           </NavLink>
-          <button className="lg:hidden" onClick={() => setMobileOpen(false)}><X size={18} /></button>
+          <button className="lg:hidden" onClick={() => setMobileOpen(false)} style={{ color: "var(--ink-3)" }}><X size={16} /></button>
         </div>
-        <nav className="mt-8 space-y-1">
+        <nav className="mt-7 space-y-0.5">
           {navItems.map(item => {
             const Icon = item.icon;
             return (
-              <NavLink key={item.to} to={item.to} end={item.end} onClick={() => setMobileOpen(false)} className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3 py-3 text-[13px] transition ${isActive ? "bg-[#c8954f]/[.12] text-[#e7c58d]" : "text-[#90989a] hover:bg-white/[.04] hover:text-white"}`}>
-                <Icon size={16} /><span>{item.label}</span>
+              <NavLink
+                key={item.to} to={item.to} end={item.end} onClick={() => setMobileOpen(false)}
+                className={({ isActive }) =>
+                  `flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors ${
+                    isActive ? "font-medium" : ""
+                  }`
+                }
+                style={({ isActive }) => isActive
+                  ? { background: "var(--primary-dim)", color: "var(--primary)", border: "1px solid var(--primary-border)" }
+                  : { color: "var(--ink-2)", border: "1px solid transparent" }
+                }
+              >
+                <Icon size={15} /><span>{item.label}</span>
               </NavLink>
             );
           })}
           {user.role === "ADMIN" ? (
-            <NavLink to="/system-health" onClick={() => setMobileOpen(false)} className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3 py-3 text-[13px] transition ${isActive ? "bg-[#c8954f]/[.12] text-[#e7c58d]" : "text-[#90989a] hover:bg-white/[.04] hover:text-white"}`}>
-              <Database size={16} />System health
+            <NavLink
+              to="/system-health" onClick={() => setMobileOpen(false)}
+              className={({ isActive }) => `flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors ${isActive ? "font-medium" : ""}`}
+              style={({ isActive }) => isActive
+                ? { background: "var(--primary-dim)", color: "var(--primary)", border: "1px solid var(--primary-border)" }
+                : { color: "var(--ink-2)", border: "1px solid transparent" }
+              }
+            >
+              <Database size={15} />System health
             </NavLink>
           ) : null}
         </nav>
-        <div className="absolute bottom-4 left-4 right-4 rounded-2xl border border-white/[.07] bg-white/[.025] p-3">
-          <div className="flex items-center gap-3"><span className="grid size-8 place-items-center rounded-full bg-white/[.06]"><UserRound size={15} /></span><div className="min-w-0 flex-1"><p className="truncate text-[12px] font-medium">{user.name}</p><p className={`${dataText} mt-0.5 text-[10px] text-[#788083]`}>{user.role.replace("_", " ")}</p></div></div>
-          <button onClick={() => void logout()} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-white/[.07] py-2 text-[12px] text-[#aeb4b3] hover:bg-white/[.05]"><LogOut size={13} />Logout</button>
+        <div className="absolute bottom-4 left-4 right-4 rounded-lg p-3" style={{ border: "1px solid var(--border)", background: "var(--surface-2)" }}>
+          <div className="flex items-center gap-2.5">
+            <span className="grid size-7 place-items-center rounded-full" style={{ background: "var(--surface-3)", color: "var(--ink-2)" }}><UserRound size={13} /></span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[12px] font-medium" style={{ color: "var(--foreground)" }}>{user.name}</p>
+              <p className={`${dataText} mt-0.5 text-[10px]`} style={{ color: "var(--ink-4)" }}>{user.role.replace("_", " ")}</p>
+            </div>
+          </div>
+          <button onClick={() => void logout()} className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] transition-colors" style={{ border: "1px solid var(--border)", color: "var(--ink-3)" }}><LogOut size={12} />Logout</button>
         </div>
       </aside>
 
-      <div className="lg:pl-[255px]">
-        <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-white/[.065] bg-[#0b0e0c]/88 px-4 backdrop-blur-xl sm:px-6 [.theme-light_&]:!bg-[#F6F8FB]/90">
+      <div className="lg:pl-[248px]">
+        <header
+          className="sticky top-0 z-40 flex h-14 items-center justify-between px-4 backdrop-blur-xl sm:px-6"
+          style={{ borderBottom: "1px solid var(--border)", background: "color-mix(in srgb, var(--background) 90%, transparent)" }}
+        >
           <div className="flex items-center gap-3">
-            <IconButton label="Open navigation" onClick={() => setMobileOpen(true)}><Menu className="lg:hidden" size={17} /></IconButton>
+            <IconButton label="Open navigation" onClick={() => setMobileOpen(true)}><Menu className="lg:hidden" size={15} /></IconButton>
             <div className="hidden sm:block">
-              <p className={`${dataText} ${connectionTone} text-[11px] tracking-[.1em]`}>{wsStatus === "CONNECTED" ? "LIVE CHANNEL CONNECTED" : `${wsStatus} · REST FALLBACK ACTIVE`}</p>
-              <p className="mt-0.5 text-[10px] text-[#747c7e]">Last authoritative sync {lastSyncAt ? shortTime(lastSyncAt) : "pending"}</p>
+              <p className={`${dataText} text-[10px] tracking-[.12em] font-semibold`} style={{ color: connectionColor }}>{wsStatus === "CONNECTED" ? "LIVE CHANNEL CONNECTED" : `${wsStatus} · REST FALLBACK ACTIVE`}</p>
+              <p className={`${dataText} mt-0.5 text-[10px]`} style={{ color: "var(--ink-4)" }}>Last authoritative sync {lastSyncAt ? shortTime(lastSyncAt) : "pending"}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <ThemeToggle theme={theme} setTheme={setTheme} />
-            <button onClick={() => setAlertsOpen(true)} className="relative grid size-9 place-items-center rounded-xl border border-white/[.075] bg-white/[.025] text-[#aeb5ba] hover:bg-white/[.07]" aria-label="Open alerts">
-              <Bell size={16} />
-              {openAttention > 0 ? <span className="absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full bg-[#b95045] px-1 text-[10px] text-white">{openAttention}</span> : null}
+            <button
+              onClick={() => setAlertsOpen(true)}
+              className="relative grid size-8 place-items-center rounded-lg transition-colors"
+              style={{ border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--ink-2)" }}
+              aria-label="Open alerts"
+            >
+              <Bell size={14} />
+              {openAttention > 0 ? <span className="absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full px-1 text-[9px] font-bold" style={{ background: "var(--risk-critical)", color: "#fff" }}>{openAttention}</span> : null}
             </button>
           </div>
         </header>
@@ -425,10 +477,13 @@ function AppShell() {
 
 function MetricCard({ label, value, note, icon: Icon }: { label: string; value: string | number; note: string; icon: typeof Activity }) {
   return (
-    <div className={`${shell} rounded-2xl p-4`}>
-      <div className="flex items-center justify-between"><p className={`${dataText} text-[10px] tracking-[.12em] text-[#7f8789]`}>{label}</p><Icon size={14} className="text-[#c8954f]" /></div>
-      <p className={`${dataText} mt-4 text-2xl text-[#eeece7]`}>{value}</p>
-      <p className="mt-1 text-[11px] text-[#7d8587]">{note}</p>
+    <div className={`${shell} rounded-xl p-4`}>
+      <div className="flex items-center justify-between">
+        <p className={`${dataText} text-[9px] tracking-[.16em] uppercase`} style={{ color: "var(--ink-4)" }}>{label}</p>
+        <span className="grid size-6 place-items-center rounded-md" style={{ background: "var(--primary-dim)", color: "var(--primary)" }}><Icon size={12} /></span>
+      </div>
+      <p className={`${dataText} mt-3 text-[22px] font-semibold`} style={{ color: "var(--foreground)" }}>{value}</p>
+      <p className="mt-1 text-[11px]" style={{ color: "var(--ink-3)" }}>{note}</p>
     </div>
   );
 }
@@ -436,19 +491,48 @@ function MetricCard({ label, value, note, icon: Icon }: { label: string; value: 
 function ZoneCard({ zone }: { zone: DashboardZone }) {
   const navigate = useNavigate();
   const status = displayStatus(zone);
+  const tone = statusStyles[status];
   const predictionPercent = zone.prediction ? Math.round(zone.prediction.probability * 100) : null;
   return (
-    <button onClick={() => navigate(`/zones/${zone.code}`)} className={`${shell} group w-full rounded-2xl p-4 text-left transition hover:-translate-y-0.5 hover:border-white/[.16]`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl border border-white/[.08] bg-white/[.035] text-[#c8ccca]">{zoneIconEl(zone.code, 17)}</span><div className="min-w-0"><p className="truncate text-[15px] font-medium">{zone.name}</p><p className={`${dataText} mt-1 text-[10px] text-[#747d7f]`}>{zone.code}</p></div></div>
-        <RiskRing value={zone.riskScore} status={status} />
+    <button
+      onClick={() => navigate(`/zones/${zone.code}`)}
+      className="group relative w-full overflow-hidden rounded-xl text-left transition-all hover:-translate-y-px"
+      style={{ border: "1px solid var(--border)", background: "var(--surface-1)" }}
+    >
+      {/* Signature element: status stripe */}
+      <span className={`absolute inset-y-0 left-0 w-[3px] ${tone.stripe} rounded-l-xl`} />
+      <div className="pl-4 pr-4 pt-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg" style={{ border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--ink-2)" }}>{zoneIconEl(zone.code, 16)}</span>
+            <div className="min-w-0">
+              <p className="truncate text-[14px] font-semibold" style={{ color: "var(--foreground)" }}>{zone.name}</p>
+              <p className={`${dataText} mt-0.5 text-[10px]`} style={{ color: "var(--ink-4)" }}>{zone.code}</p>
+            </div>
+          </div>
+          <RiskRing value={zone.riskScore} status={status} />
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <StatusBadge status={status} compact />
+          <span className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[10px]" style={{ border: "1px solid var(--border)", color: "var(--ink-3)" }}>
+            {hazardIconEl(zone.primaryHazard, 10)}{hazardLabels[zone.primaryHazard ?? "NONE"]}
+          </span>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+          <div className="rounded-lg p-2" style={{ background: "var(--surface-2)" }}>
+            <p style={{ color: "var(--ink-4)" }}>Occupancy</p>
+            <p className="mt-0.5 font-medium" style={{ color: "var(--ink-2)" }}>{zone.occupancy ? "Occupied" : "No presence"}</p>
+          </div>
+          <div className="rounded-lg p-2" style={{ background: "var(--surface-2)" }}>
+            <p style={{ color: "var(--ink-4)" }}>Predicted Risk</p>
+            <p className="mt-0.5 font-medium" style={{ color: "var(--ink-2)" }}>{predictionPercent === null ? "No model sample" : `${predictionPercent}% advisory`}</p>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center justify-between border-t pt-3 pb-3 text-[10px]" style={{ borderColor: "var(--border)", color: "var(--ink-4)" }}>
+          <span>{zone.isTrendingCritical ? "↗ Trending critical" : "Trend monitored"}</span>
+          <span className="flex items-center gap-1">Updated {shortTime(zone.lastReceivedAt ?? zone.lastReadingAt)} <ChevronRight className="transition group-hover:translate-x-0.5" size={11} /></span>
+        </div>
       </div>
-      <div className="mt-4 flex flex-wrap items-center gap-2"><StatusBadge status={status} compact /><span className="inline-flex items-center gap-1.5 rounded-full border border-white/[.07] px-2 py-1 text-[11px] text-[#aeb4b2]">{hazardIconEl(zone.primaryHazard, 11)}{hazardLabels[zone.primaryHazard ?? "NONE"]}</span></div>
-      <div className="mt-4 grid grid-cols-2 gap-2 text-[11px]">
-        <div className="rounded-xl bg-white/[.025] p-2.5"><p className="text-[#70797b]">Occupancy</p><p className="mt-1 text-[#d0d2cd]">{zone.occupancy ? "Occupied" : "No presence"}</p></div>
-        <div className="rounded-xl bg-white/[.025] p-2.5"><p className="text-[#70797b]">Predicted Risk</p><p className="mt-1 text-[#d0d2cd]">{predictionPercent === null ? "No model sample" : `${predictionPercent}% advisory`}</p></div>
-      </div>
-      <div className="mt-4 flex items-center justify-between border-t border-white/[.055] pt-3 text-[10px] text-[#737c7d]"><span>{zone.isTrendingCritical ? "↗ Trending toward critical" : "Trend monitored"}</span><span className="flex items-center gap-1">Updated {shortTime(zone.lastReceivedAt ?? zone.lastReadingAt)} <ChevronRight className="transition group-hover:translate-x-0.5" size={12} /></span></div>
     </button>
   );
 }
@@ -456,18 +540,48 @@ function ZoneCard({ zone }: { zone: DashboardZone }) {
 function PriorityCard({ item, compact = false }: { item: PriorityItem; compact?: boolean }) {
   const navigate = useNavigate();
   const { acknowledgeIncident } = useRobofusion();
+  const isTop = item.rank === 1;
   return (
-    <article className={`rounded-2xl border ${item.rank === 1 ? "border-[#b95045]/35 bg-[#b95045]/[.09]" : "border-white/[.08] bg-white/[.025]"} ${compact ? "p-3" : "p-5"}`}>
+    <article
+      className={`relative overflow-hidden rounded-xl ${compact ? "p-3" : "p-4"}`}
+      style={isTop
+        ? { border: "1px solid var(--critical-border)", background: "var(--critical-surface)" }
+        : { border: "1px solid var(--border)", background: "var(--surface-1)" }
+      }
+    >
+      {isTop && <span className="absolute inset-y-0 left-0 w-[3px] rounded-l-xl" style={{ background: "var(--risk-critical)" }} />}
       <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 gap-3"><span className={`${dataText} grid size-8 shrink-0 place-items-center rounded-full ${item.rank === 1 ? "bg-[#b95045]/25 text-[#ef9b8d]" : "bg-white/[.06] text-[#c7cbc7]"}`}>#{item.rank}</span><div><p className="text-[15px] font-medium">{item.zone_name}</p><p className={`${dataText} mt-1 text-[10px] text-[#7e8789]`}>{item.primary_hazard} · {item.occupancy ? "OCCUPIED" : "NO OCCUPANCY"}</p></div></div>
-        <div className="text-right"><p className={`${dataText} text-[18px] text-[#efc987]`}>{item.priority_score.toFixed(1)}</p><p className="text-[10px] text-[#737c7e]">PRIORITY SCORE</p></div>
+        <div className="flex min-w-0 gap-3">
+          <span
+            className={`${dataText} grid size-7 shrink-0 place-items-center rounded-full text-[11px] font-bold`}
+            style={isTop
+              ? { background: "var(--critical-surface)", border: "1px solid var(--critical-border)", color: "var(--critical-ink)" }
+              : { background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--ink-2)" }
+            }
+          >#{item.rank}</span>
+          <div>
+            <p className="text-[14px] font-semibold" style={{ color: "var(--foreground)" }}>{item.zone_name}</p>
+            <p className={`${dataText} mt-0.5 text-[10px]`} style={{ color: "var(--ink-4)" }}>{item.primary_hazard} · {item.occupancy ? "OCCUPIED" : "EMPTY"}</p>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className={`${dataText} text-[17px] font-semibold`} style={{ color: "var(--warning-ink)" }}>{item.priority_score.toFixed(1)}</p>
+          <p className={`${dataText} text-[9px]`} style={{ color: "var(--ink-4)" }}>PRIORITY SCORE</p>
+        </div>
       </div>
-      <p className={`${compact ? "mt-3 line-clamp-2" : "mt-4"} text-[12px] leading-5 text-[#aeb4b2]`}>{item.ranking_reason}</p>
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/[.06] pt-3">
-        <div className={`${dataText} flex gap-4 text-[10px] text-[#7e8789]`}><span>Risk {item.risk_score}</span><span>Critical {secondsLabel(item.critical_duration_seconds)}</span>{item.nlp_advisory_bonus > 0 ? <span>NLP +{item.nlp_advisory_bonus}</span> : null}</div>
+      <p className={`${compact ? "mt-2 line-clamp-2" : "mt-3"} text-[12px] leading-5`} style={{ color: "var(--ink-2)" }}>{item.ranking_reason}</p>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-2.5" style={{ borderColor: "var(--border)" }}>
+        <div className={`${dataText} flex gap-4 text-[10px]`} style={{ color: "var(--ink-4)" }}>
+          <span>Risk {item.risk_score}</span>
+          <span>Critical {secondsLabel(item.critical_duration_seconds)}</span>
+          {item.nlp_advisory_bonus > 0 ? <span>NLP +{item.nlp_advisory_bonus}</span> : null}
+        </div>
         <div className="flex gap-2">
-          {item.status === "OPEN" ? <button onClick={() => void acknowledgeIncident(item.incident_id)} className="rounded-lg border border-[#c8954f]/30 px-2.5 py-1.5 text-[11px] text-[#dfba7c] hover:bg-[#c8954f]/10">Acknowledge</button> : <span className="flex items-center gap-1 text-[11px] text-[#b4cdaa]"><Check size={12} />Acknowledged</span>}
-          <button onClick={() => navigate(`/incidents/${item.incident_id}`)} className="text-[11px] text-[#c8cbc6] hover:text-white">Timeline →</button>
+          {item.status === "OPEN"
+            ? <button onClick={() => void acknowledgeIncident(item.incident_id)} className="rounded-md px-2 py-1 text-[11px] transition-colors" style={{ border: "1px solid var(--warning-border)", color: "var(--warning-ink)" }}>Acknowledge</button>
+            : <span className="flex items-center gap-1 text-[11px]" style={{ color: "var(--safe-ink)" }}><Check size={11} />Acknowledged</span>
+          }
+          <button onClick={() => navigate(`/incidents/${item.incident_id}`)} className="text-[11px] transition-colors" style={{ color: "var(--ink-2)" }}>Timeline →</button>
         </div>
       </div>
     </article>
