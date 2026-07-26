@@ -1,0 +1,421 @@
+@custom-variant dark (&:is(.dark *));
+
+ :root {
+  --font-size: 18px;
+  --background: #0b0e0c;
+  --foreground: #f7f8f4;
+  --card: rgba(20, 25, 22, 0.86);
+  --card-foreground: #f7f8f4;
+  --popover: #151a17;
+  --popover-foreground: #f7f8f4;
+  --primary: #d1a15b;
+  --primary-foreground: #10120f;
+  --secondary: #202721;
+  --secondary-foreground: #ebeee7;
+  --muted: #1c221e;
+  --muted-foreground: #bbc5bd;
+  --accent: #2c2a22;
+  --accent-foreground: #f1ead9;
+  --destructive: #be5a4e;
+  --destructive-foreground: #fff0ec;
+  --border: rgba(234, 239, 231, 0.11);
+  --input: rgba(10, 14, 12, 0.78);
+  --input-background: rgba(27, 34, 29, 0.76);
+  --switch-background: #667068;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: #d1a15b;
+  --chart-1: #c8954f;
+  --chart-2: #88a879;
+  --chart-3: #c8954f;
+  --chart-4: #b95045;
+  --chart-5: #9c8d79;
+  --radius: 1rem;
+  --sidebar: #0f1311;
+  --sidebar-foreground: #e2e6de;
+  --sidebar-primary: #d1a15b;
+  --sidebar-primary-foreground: #10120f;
+  --sidebar-accent: #202721;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(234, 239, 231, 0.09);
+  --sidebar-ring: #d1a15b;
+  --risk-safe: #88a879;
+  --risk-warning: #c8954f;
+  --risk-critical: #b95045;
+  --risk-offline: #69727c;
+  --risk-track: rgba(255, 255, 255, 0.08);
+}
+
+.dark {
+  --background: #0b0e0c;
+  --foreground: #f7f8f4;
+  --card: rgba(20, 25, 22, 0.86);
+  --card-foreground: #f7f8f4;
+  --popover: #151a17;
+  --popover-foreground: #f7f8f4;
+  --primary: #d1a15b;
+  --primary-foreground: #10120f;
+  --secondary: #202721;
+  --secondary-foreground: #ebeee7;
+  --muted: #1c221e;
+  --muted-foreground: #bbc5bd;
+  --accent: #2c2a22;
+  --accent-foreground: #f1ead9;
+  --destructive: #be5a4e;
+  --destructive-foreground: #fff0ec;
+  --border: rgba(234, 239, 231, 0.11);
+  --input: rgba(10, 14, 12, 0.78);
+  --input-background: rgba(27, 34, 29, 0.76);
+  --switch-background: #667068;
+  --ring: #d1a15b;
+  --chart-1: #c8954f;
+  --chart-2: #88a879;
+  --chart-3: #c8954f;
+  --chart-4: #b95045;
+  --chart-5: #9c8d79;
+  --sidebar: #0f1311;
+  --sidebar-foreground: #e2e6de;
+  --sidebar-primary: #d1a15b;
+  --sidebar-primary-foreground: #10120f;
+  --sidebar-accent: #202721;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(234, 239, 231, 0.09);
+  --sidebar-ring: #d1a15b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(circle at 88% -12%, rgba(209, 161, 91, 0.075), transparent 27rem),
+      radial-gradient(circle at 7% 88%, rgba(136, 168, 121, 0.055), transparent 29rem);
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-variation-settings: "opsz" 18;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: rgba(209, 161, 91, 0.28);
+    color: #fffaf0;
+  }
+
+  button, input, select, textarea {
+    font-family: inherit;
+  }
+
+  /**
+  * Default typography styles for HTML elements (h1-h4, p, label, button, input).
+  * These are in @layer base, so Tailwind utility classes (like text-sm, text-lg) automatically override them.
+  */
+
+  html {
+    font-size: var(--font-size);
+  }
+
+  h1, h2, h3, h4 {
+    font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  h1 {
+    font-size: var(--text-2xl);
+    font-weight: 600;
+    line-height: 1.12;
+    letter-spacing: -0.025em;
+  }
+
+  h2 {
+    font-size: var(--text-xl);
+    font-weight: 600;
+    line-height: 1.18;
+    letter-spacing: -0.018em;
+  }
+
+  h3 {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  h4 {
+    font-size: var(--text-base);
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  label {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.35;
+  }
+
+  button {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.35;
+  }
+
+  input {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-normal);
+    line-height: 1.4;
+  }
+}
+
+/* Dark-mode readability pass — bright neutral ink keeps the operational hierarchy legible
+   without turning status colours into decorative text. */
+.dark {
+  --foreground: #f7f8f4;
+  --card-foreground: #f7f8f4;
+  --popover-foreground: #f7f8f4;
+  --secondary-foreground: #ebeee7;
+  --muted-foreground: #bbc5bd;
+  --accent-foreground: #f1ead9;
+  --sidebar-foreground: #e2e6de;
+}
+
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4 {
+  color: #fffefa;
+}
+
+/* Lift the neutral telemetry/caption scale by one clear contrast tier. */
+.dark [class*="text-[#5"],
+.dark [class*="text-[#6"] { color: #adb9b8 !important; }
+.dark [class*="text-[#7"] { color: #c1cac8 !important; }
+.dark [class*="text-[#8"] { color: #ced5d2 !important; }
+.dark [class*="text-[#9"] { color: #d9dedb !important; }
+.dark [class*="text-[#a"],
+.dark [class*="text-[#b"] { color: #e0e5e0 !important; }
+
+/* Safety semantics retain their distinct, scan-friendly hues. */
+.dark [class*="text-[#b1c9a8]"],
+.dark [class*="text-[#b4cdaa]"],
+.dark [class*="text-[#b7cfaf]"],
+.dark [class*="text-[#b7ccaf]"],
+.dark [class*="text-[#b8cfaf]"],
+.dark [class*="text-[#899b84]"],
+.dark [class*="text-[#afc8a6]"],
+.dark [class*="text-[#b3caaa]"],
+.dark [class*="text-[#b4c7ac]"],
+.dark [class*="text-[#c4d7bc]"],
+.dark [class*="text-[#91aa88]"],
+.dark [class*="text-[#8da487]"] { color: #c1d7b8 !important; }
+.dark [class*="text-[#c8954f]"],
+.dark [class*="text-[#dfba7c]"],
+.dark [class*="text-[#dbb06d]"],
+.dark [class*="text-[#d8ae71]"],
+.dark [class*="text-[#d8bb85]"],
+.dark [class*="text-[#d2b37e]"],
+.dark [class*="text-[#cbbd9f]"],
+.dark [class*="text-[#e3bd82]"],
+.dark [class*="text-[#e1bd82]"] { color: #efc987 !important; }
+.dark [class*="text-[#de8b7d]"],
+.dark [class*="text-[#dc8a7d]"],
+.dark [class*="text-[#df8f82]"],
+.dark [class*="text-[#df9083]"],
+.dark [class*="text-[#dc9a90]"],
+.dark [class*="text-[#e09a8e]"],
+.dark [class*="text-[#e4a49b]"],
+.dark [class*="text-[#e6b4aa]"],
+.dark [class*="text-[#efc1b8]"] { color: #f0a79b !important; }
+.dark [class*="text-[#8f99a5]"] { color: #b7c1cc !important; }
+
+/* Premium light mode — cool, restrained, and deliberately operational.
+   Cloud-white surfaces replace every warm / creamy treatment; colour is reserved for state and action. */
+.theme-light {
+  --background: #F6F8FB;
+  --foreground: #111827;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --popover: #ffffff;
+  --popover-foreground: #111827;
+  --primary: #0F766E;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F9FAFC;
+  --secondary-foreground: #111827;
+  --muted: #F9FAFC;
+  --muted-foreground: #667085;
+  --accent: #ECFDF3;
+  --accent-foreground: #115E59;
+  --destructive: #E5484D;
+  --destructive-foreground: #FFFFFF;
+  --border: #E8EDF3;
+  --input: #ffffff;
+  --input-background: #ffffff;
+  --switch-background: #98A2B3;
+  --ring: #0F766E;
+  --chart-1: #0F766E;
+  --chart-2: #039855;
+  --chart-3: #3B82F6;
+  --chart-4: #E5484D;
+  --chart-5: #98A2B3;
+  --sidebar: #F9FAFC;
+  --sidebar-foreground: #111827;
+  --sidebar-primary: #0F766E;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #ECFDF3;
+  --sidebar-accent-foreground: #115E59;
+  --sidebar-border: #E8EDF3;
+  --sidebar-ring: #0F766E;
+  --risk-safe: #039855;
+  --risk-warning: #D97706;
+  --risk-critical: #E5484D;
+  --risk-offline: #98A2B3;
+  --risk-track: #E9EEF5;
+}
+
+.theme-light body {
+  background-color: #F6F8FB;
+  background-image: none;
+}
+
+/* Cool neutral architecture: a pale-slate rail and precise white working surfaces. */
+.theme-light [class*="bg-[#0b0e0c]"] { background-color: #F6F8FB !important; }
+.theme-light [class*="bg-[#101411]"] { background-color: #F9FAFC !important; }
+.theme-light [class*="bg-[#101213]"] { background-color: #F9FAFC !important; }
+.theme-light [class*="bg-[#121713]"] { background-color: #ffffff !important; }
+.theme-light [class*="bg-[#151917]"] { background-color: #ffffff !important; }
+.theme-light [class*="bg-[#171a1d]"] { background-color: #F6F8FB !important; }
+.theme-light [class*="bg-[#1e2b20]"] { background-color: #ECFDF3 !important; }
+.theme-light [class*="bg-[#0e1011]"] { background-color: #ffffff !important; }
+
+/* Former dark glass becomes a nearly-flat technical paper treatment. */
+.theme-light [class*="bg-white/"] { background-color: rgba(17, 24, 39, .025) !important; }
+.theme-light [class*="bg-black/"] { background-color: rgba(17, 24, 39, .018) !important; }
+.theme-light [class*="border-white/"] { border-color: #E8EDF3 !important; }
+.theme-light [class*="hover:bg-white/"]:hover { background-color: rgba(15, 118, 110, .06) !important; }
+
+/* Clear, accessible incident colour. These hues are never used as decorative panel ground. */
+.theme-light [class*="bg-[#88a879]/"] { background-color: #ECFDF3 !important; }
+.theme-light [class~="bg-[#88a879]"] { background-color: #039855 !important; }
+.theme-light [class*="bg-[#c8954f]/"] { background-color: #FFF7ED !important; }
+.theme-light [class~="bg-[#c8954f]"] { background-color: #D97706 !important; }
+.theme-light [class*="bg-[#b95045]/"] { background-color: #FEF3F2 !important; }
+.theme-light [class~="bg-[#b95045]"] { background-color: #E5484D !important; }
+.theme-light [class*="bg-[#69727c]/"] { background-color: #EEF2F7 !important; }
+.theme-light [class~="bg-[#69727c]"] { background-color: #98A2B3 !important; }
+
+/* Ink hierarchy: graphite-navy for content, cool slate for supporting telemetry. */
+.theme-light [class*="text-[#"] { color: #111827 !important; }
+.theme-light .text-white { color: #111827 !important; }
+.theme-light [class*="text-[#f0"], .theme-light [class*="text-[#ef"],
+.theme-light [class*="text-[#ee"], .theme-light [class*="text-[#e8"],
+.theme-light [class*="text-[#e7"], .theme-light [class*="text-[#e3"],
+.theme-light [class*="text-[#d9"], .theme-light [class*="text-[#d4"],
+.theme-light [class*="text-[#d2"], .theme-light [class*="text-[#d1"],
+.theme-light [class*="text-[#d0"], .theme-light [class*="text-[#c9"],
+.theme-light [class*="text-[#c6"], .theme-light [class*="text-[#c5"] { color: #111827 !important; }
+.theme-light [class*="text-[#a"], .theme-light [class*="text-[#9"],
+.theme-light [class*="text-[#8"], .theme-light [class*="text-[#7"],
+.theme-light [class*="text-[#6"] { color: #667085 !important; }
+.theme-light [class*="text-[#c8954f]"], .theme-light [class*="text-[#dfba7c]"],
+.theme-light [class*="text-[#dbb06d]"], .theme-light [class*="text-[#d8ae71]"],
+.theme-light [class*="text-[#d8bb85]"], .theme-light [class*="text-[#d2b37e]"],
+.theme-light [class*="text-[#cbbd9f]"] { color: #D97706 !important; }
+.theme-light [class*="text-[#b1c9a8]"], .theme-light [class*="text-[#b4cdaa]"],
+.theme-light [class*="text-[#b7cfaf]"], .theme-light [class*="text-[#b7ccaf]"],
+.theme-light [class*="text-[#b8cfaf]"], .theme-light [class*="text-[#899b84]"] { color: #039855 !important; }
+.theme-light [class*="text-[#de8b7d]"], .theme-light [class*="text-[#dc8a7d]"],
+.theme-light [class*="text-[#df8f82]"], .theme-light [class*="text-[#df9083]"],
+.theme-light [class*="text-[#dc9a90]"], .theme-light [class*="text-[#e09a8e]"],
+.theme-light [class*="text-[#e4a49b]"], .theme-light [class*="text-[#e6b4aa]"],
+.theme-light [class*="text-[#efc1b8]"] { color: #E5484D !important; }
+.theme-light [class*="text-[#8f99a5]"] { color: #98A2B3 !important; }
+
+/* Deep eucalyptus is the only primary interactive colour; no cream actions remain. */
+.theme-light [class*="bg-[#d6d1c5]"] { background-color: #0F766E !important; color: #FFFFFF !important; }
+.theme-light [class*="text-[#161716]"], .theme-light [class*="text-[#10120f]"] { color: #FFFFFF !important; }
+.theme-light [class*="border-[#c8954f]"] { border-color: rgba(217, 119, 6, .32) !important; }
+.theme-light [class*="border-[#88a879]"] { border-color: rgba(3, 152, 85, .30) !important; }
+.theme-light [class*="border-[#b95045]"] { border-color: rgba(229, 72, 77, .30) !important; }
+.theme-light .shadow-2xl, .theme-light [class*="shadow-[0_24px"] { box-shadow: 0 22px 52px #E8EDF3 !important; }
+
+.theme-light input, .theme-light select, .theme-light textarea {
+  color: #111827 !important;
+  background-color: #ffffff !important;
+  border-color: #E8EDF3 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .95);
+}
+.theme-light input::placeholder, .theme-light textarea::placeholder { color: #98A2B3 !important; opacity: 1; }
+.theme-light input:focus, .theme-light select:focus, .theme-light textarea:focus {
+  border-color: #0F766E !important;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, .14), inset 0 1px 0 rgba(255, 255, 255, .95) !important;
+}
+.theme-light input + span { color: #667085 !important; }
+
+.theme-light button[class*="grid size-"] {
+  background-color: #F9FAFC !important;
+  border-color: #E9EEF5 !important;
+  color: #0F766E !important;
+}
+.theme-light button[class*="grid size-"]:hover {
+  background-color: #ECFDF3 !important;
+  border-color: rgba(15, 118, 110, .32) !important;
+  color: #0F766E !important;
+}
+
+/* The dedicated login CTA stays richly eucalyptus and gains depth—not a warm hover. */
+.theme-light [class*="bg-[#285847]"]:hover { background-color: #115E59 !important; color: #FFFFFF !important; }
+
+/* Light-mode headings use the strongest ink tier for operational scanning. */
+.theme-light h1,
+.theme-light h2,
+.theme-light h3,
+.theme-light h4 {
+  color: #111827;
+}
+
+/* Key telemetry values stay in the strongest neutral ink in light mode. Semantic
+   labels and state badges retain their safety colours; the values themselves scan
+   as one consistent operational hierarchy. */
+.theme-light .numeric-emphasis {
+  color: #111827 !important;
+}

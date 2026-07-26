@@ -1,12 +1,13 @@
 import "dotenv/config";
 import { createServer } from "node:http";
 import next from "next";
-import { WebSocketServer, type WebSocket } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import { realtime } from "./src/server/realtime/hub";
 import { collections } from "./src/server/db/collections";
 import { markOfflineZones } from "./src/server/services/offline-service";
 import { recoverSystemState } from "./src/server/services/recovery-service";
 import { id } from "./src/server/utils/id";
+import { priorityQueue } from "./src/server/services/incident-service";
 
 const dev = process.env.NODE_ENV !== "production";
 const app = next({ dev });
@@ -14,9 +15,10 @@ const handler = app.getRequestHandler();
 
 async function sendSnapshot(socket: WebSocket) {
   const c = await collections();
-  const [zones, incidents] = await Promise.all([
-    c.zones.find({}, { projection: { _id: 0, apiKeyHash: 0 } }).toArray(),
+  const [zones, incidents, queue] = await Promise.all([
+    c.zones.find({ configured: true }, { projection: { _id: 0, apiKeyHash: 0 } }).toArray(),
     c.incidents.find({ active: true }, { projection: { _id: 0 } }).toArray(),
+    priorityQueue(),
   ]);
   socket.send(JSON.stringify({
     event_id: id(),
@@ -25,6 +27,7 @@ async function sendSnapshot(socket: WebSocket) {
     data: {
       zones,
       incidents,
+      priority_queue: queue,
       server_time: new Date().toISOString(),
     },
     version: 0,
@@ -49,7 +52,7 @@ async function main() {
 
     // Forward all realtime events with standardised envelope
     const unsubscribe = realtime.subscribe((event, payload) => {
-      if (socket.readyState !== socket.OPEN) return;
+      if (socket.readyState !== WebSocket.OPEN) return;
       // payload should already be a proper event envelope from services
       socket.send(JSON.stringify(payload));
     });
@@ -63,12 +66,14 @@ async function main() {
 
   // Auth guard on WS upgrade
   server.on("upgrade", async (request, socket, head) => {
+    console.log("UPGRADE REQUEST:", request.url);
     if (!request.url?.startsWith("/ws")) {
-      socket.destroy();
-      return;
+      const upgradeHandler = app.getUpgradeHandler();
+      return upgradeHandler(request, socket, head);
     }
 
     try {
+      console.log("WS auth check...");
       const cookieHeader = request.headers.cookie ?? "";
       const sessionId = /(?:^|; )scs_session=([^;]+)/.exec(cookieHeader)?.[1];
 
@@ -81,11 +86,13 @@ async function main() {
         : null;
 
       if (!user) {
+        console.log("WS Auth failed, no user found for sessionId:", sessionId);
         socket.write("HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n");
         socket.destroy();
         return;
       }
 
+      console.log("WS Auth success for:", user.email);
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit("connection", ws, request);
       });
