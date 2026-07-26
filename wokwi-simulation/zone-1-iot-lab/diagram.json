@@ -24,7 +24,7 @@
       "left": -250,
       "attrs": {
         "label": "Flame",
-        "value": "1",
+        "value": "0",
         "bounce": "0"
       }
     },
@@ -35,7 +35,7 @@
       "left": -250,
       "attrs": {
         "label": "Occupancy Cross-check (sim)",
-        "value": "1",
+        "value": "0",
         "bounce": "0"
       }
     },
@@ -46,7 +46,7 @@
       "left": -250,
       "attrs": {
         "label": "Sensor Fault",
-        "value": "1",
+        "value": "0",
         "bounce": "0"
       }
     },

@@ -64,6 +64,7 @@ void beginSecure(HTTPClient& http, WiFiClientSecure& secureClient, WiFiClient& c
   http.setConnectTimeout(8000);
   http.setTimeout(8000);
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.setReuse(true);
 }
 
 void ensureWiFiConnected() {
@@ -120,29 +121,35 @@ void processCommand(JsonVariantConst command) {
 
 bool sendPostRequest(const String& requestBody, bool isQueued) {
   if (WiFi.status() != WL_CONNECTED) return false;
-  HTTPClient http;
-  WiFiClientSecure secureClient;
-  WiFiClient client;
-  beginSecure(http, secureClient, client, String(BACKEND_URL) + "/api/v1/readings/" + ZONE_CODE);
+  static HTTPClient http;
+  static WiFiClientSecure secureClient;
+  static WiFiClient client;
+  static bool initialized = false;
+  if (!initialized) {
+    beginSecure(http, secureClient, client, String(BACKEND_URL) + "/api/v1/readings/" + ZONE_CODE);
+    initialized = true;
+  }
+
   http.addHeader("Content-Type", "application/json");
   http.addHeader("x-zone-api-key", ZONE_API_KEY);
   int code = http.POST(requestBody);
   bool success = code == 200 || code == 201;
+  String responseBody = http.getString();
+  
   if (success && !isQueued) {
     StaticJsonDocument<768> response;
-    if (deserializeJson(response, http.getString()) == DeserializationError::Ok
+    if (deserializeJson(response, responseBody) == DeserializationError::Ok
         && response.containsKey("command")
         && !response["command"].isNull()) {
       processCommand(response["command"].as<JsonVariantConst>());
     }
   } else if (!success) {
     if (code > 0) {
-      Serial.printf("Reading API error %d: %s\n", code, http.getString().c_str());
+      Serial.printf("Reading API error %d: %s\n", code, responseBody.c_str());
     } else {
       Serial.printf("Reading API connection failed, code %d: %s\n", code, http.errorToString(code).c_str());
     }
   }
-  http.end();
   return success;
 }
 
@@ -228,19 +235,24 @@ void sendReadings() {
 
 void fetchCommands() {
   if (WiFi.status() != WL_CONNECTED) return;
-  HTTPClient http;
-  WiFiClientSecure secureClient;
-  WiFiClient client;
-  beginSecure(http, secureClient, client, String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE);
+  static HTTPClient http;
+  static WiFiClientSecure secureClient;
+  static WiFiClient client;
+  static bool initialized = false;
+  if (!initialized) {
+    beginSecure(http, secureClient, client, String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE);
+    initialized = true;
+  }
+  
   http.addHeader("x-zone-api-key", ZONE_API_KEY);
   int code = http.GET();
+  String responseBody = http.getString();
   if (code == 200) {
     StaticJsonDocument<512> response;
-    if (deserializeJson(response, http.getString()) == DeserializationError::Ok) {
+    if (deserializeJson(response, responseBody) == DeserializationError::Ok) {
       processCommand(response.as<JsonVariantConst>());
     }
   }
-  http.end();
 }
 
 void setup() {
