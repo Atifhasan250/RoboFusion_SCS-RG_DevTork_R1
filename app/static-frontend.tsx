@@ -103,14 +103,36 @@ function AppShell() {
 
 function PageIntro({ eyebrow, title, children, action }: { eyebrow: string; title: string; children: ReactNode; action?: ReactNode }) { return <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className={`${data} text-[12px] tracking-[.16em] text-[#c8954f]`}>{eyebrow}</p><h1 className="mt-2 text-2xl font-medium tracking-[-.03em] text-[#f0eee9]">{title}</h1><p className="mt-1.5 text-[14px] text-[#939a9b]">{children}</p></div>{action}</div>; }
 function ZoneCard({ zone }: { zone: Zone }) {
-  const navigate = useNavigate();
+  const nav = useNavigate();
   const Icon = zone.icon;
   const isCritical = zone.status === "CRITICAL";
   const telemetryState = zone.online ? "Live telemetry" : "Gateway offline";
+  const statusStyles: Record<Status, { ring: string; text: string; line: string }> = {
+    SAFE: { ring: "border-white/[.08]", text: "text-[#d1d0c5]", line: "bg-[#88a879]" },
+    WARNING: { ring: "border-[#c8954f]/35", text: "text-[#d2b37e]", line: "bg-[#c8954f]" },
+    CRITICAL: { ring: "border-[#b95045]/40", text: "text-[#dc9a90]", line: "bg-[#b95045]" },
+    OFFLINE: { ring: "border-white/[.08]", text: "text-[#8d9496]", line: "bg-[#545b61]" },
+    NOT_CONFIGURED: { ring: "border-white/[.08]", text: "text-[#8d9496]", line: "bg-[#545b61]" },
+  };
+
+  const [dynamicTrend, setDynamicTrend] = useState<"RISING" | "STABLE" | "FALLING" | "TRENDING_TOWARD_CRITICAL" | "INSUFFICIENT_DATA" | "LOADING">("LOADING");
+  const [dynamicPredicted, setDynamicPredicted] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!zone.online) return;
+    fetch(`/api/v1/trends/${zone.code}`).then(r => r.json()).then(d => {
+       if (d.trend?.status) setDynamicTrend(d.trend.status);
+    }).catch(console.error);
+    fetch(`/api/v1/predictions/${zone.code}`).then(r => r.json()).then(d => {
+       if (d.prediction?.probability !== undefined) {
+         setDynamicPredicted(Math.round(d.prediction.probability * 100));
+       }
+    }).catch(console.error);
+  }, [zone.code, zone.risk, zone.online]);
 
   return (
     <button
-      onClick={() => navigate(`/zones/${zone.id}`)}
+      onClick={() => nav(`/zones/${zone.id}`)}
       className={`${shell} group w-full rounded-2xl p-5 text-left transition duration-200 hover:-translate-y-0.5 hover:border-white/[.16] hover:bg-white/[.025] ${isCritical ? "ring-1 ring-[#b95045]/20" : ""}`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -162,11 +184,11 @@ function ZoneCard({ zone }: { zone: Zone }) {
 
       <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/[.065] pt-3">
         <span className={`${data} text-[10px] tracking-[.08em] text-[#d0d9d5]`}>
-          FORECAST <b className="numeric-emphasis ml-1 text-[12px] text-[#f3f6f3]">{zone.predicted || "—"}</b>
+          FORECAST <b className="numeric-emphasis ml-1 text-[12px] text-[#f3f6f3]">{dynamicPredicted ?? "—"}</b>
         </span>
-        <span className={`flex shrink-0 items-center gap-1 ${data} text-[10px] tracking-[.08em] ${zone.trend === "rising" ? "text-[#d8ae71]" : "text-[#899b84]"}`}>
-          <span>{zone.trend === "rising" ? "↗" : zone.trend === "falling" ? "↘" : "→"}</span>
-          {zone.trend === "rising" ? "TRENDING UP" : zone.trend.toUpperCase()}
+        <span className={`flex shrink-0 items-center gap-1 ${data} text-[10px] tracking-[.08em] ${dynamicTrend.includes("RISING") ? "text-[#d8ae71]" : "text-[#899b84]"}`}>
+          <span>{dynamicTrend.includes("RISING") ? "↗" : dynamicTrend === "FALLING" ? "↘" : dynamicTrend === "INSUFFICIENT_DATA" ? "?" : "→"}</span>
+          {dynamicTrend.includes("RISING") ? "TRENDING UP" : dynamicTrend.replace(/_/g, " ")}
         </span>
       </div>
     </button>
@@ -187,7 +209,7 @@ function Reading({ icon, label, value }: { icon: ReactNode; label: string; value
 
 function Dashboard() {
   const { zones } = useMappedData();
-  const { reportNote } = useRobofusion();
+  const { reportNote, priorityQueue } = useRobofusion();
   const [note, setNote] = useState("");
   const [interpretation, setInterpretation] = useState<string | null>(null);
   
@@ -227,16 +249,14 @@ function Dashboard() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{zones.map((zone) => <ZoneCard key={zone.id} zone={zone}/>)}</div>
     </section>
 
-    {critical.length > 1 && <section className="mt-7"><div className="mb-3 flex items-end justify-between"><div><h2 className="text-[17px] font-medium">Priority queue</h2><p className="mt-1 text-[12px] text-[#7f8789]">Ranked by live risk, life-safety signal, occupancy, and time active.</p></div><NavLink to="/priority" className="text-[13px] text-[#cbbd9f] hover:text-white">Full queue</NavLink></div><div className="grid gap-3 lg:grid-cols-2">{critical.map((zone, index) => <PriorityCard key={zone.id} zone={zone} rank={index + 1}/>)}</div></section>}
+    {critical.length > 1 && <section className="mt-7"><div className="mb-3 flex items-end justify-between"><div><h2 className="text-[17px] font-medium">Priority queue</h2><p className="mt-1 text-[12px] text-[#7f8789]">Ranked by live risk, life-safety signal, occupancy, and time active.</p></div><NavLink to="/priority" className="text-[13px] text-[#cbbd9f] hover:text-white">Full queue</NavLink></div><div className="grid gap-3 lg:grid-cols-2">{priorityQueue.slice(0, 2).map((item: any, index: number) => <PriorityCard key={item.incident_id} item={item} rank={index + 1}/>)}</div></section>}
     <section className={`${shell} mt-7 rounded-2xl p-4 sm:p-5`}><div className="flex flex-wrap items-center justify-between gap-3"><div><p className={`${data} text-[12px] tracking-[.14em] text-[#c8954f]`}>NATURAL-LANGUAGE INCIDENT INPUT</p><p className="mt-1 text-[13px] text-[#92999a]">Notes are parsed for confirmation before they can affect queue ranking.</p></div>{interpretation && <span className="rounded-lg border border-[#88a879]/25 bg-[#88a879]/[.09] px-2.5 py-1.5 text-[12px] text-[#b7cfaf]">Understood: {interpretation}</span>}</div><div className="mt-4 flex flex-col gap-2 sm:flex-row"><input id="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. smell of gas near the IoT Lab bench" className="min-w-0 flex-1 rounded-xl border border-white/[.1] bg-[#0e1011] px-3.5 py-3 text-[14px] outline-none placeholder:text-[#626a6e] focus:border-[#c8954f]/60"/><button onClick={() => { if (!note) { setInterpretation("enter an observation first"); return; } reportNote(note).then(res => setInterpretation(res.message || "")); }} className="rounded-xl border border-white/[.1] px-4 py-3 text-[13px] text-[#c5c6bf] hover:bg-white/[.06]">Confirm interpretation</button></div></section>
   </div>; 
 }
-function PriorityCard({ zone, rank }: { zone: Zone; rank: number }) {
+function PriorityCard({ item, rank }: { item: any; rank: number }) {
   const nav = useNavigate();
   const isTopPriority = rank === 1;
-  const rationale = isTopPriority
-    ? "Smoke signal with occupied critical infrastructure; this event has the highest immediate life-safety escalation."
-    : "Gas reading is rising in the laboratory with the highest occupied count among active events.";
+  const rationale = item.ranking_reason;
 
   return (
     <article className={`${shell} rounded-2xl p-5 ${isTopPriority ? "border-[#b95045]/35 ring-1 ring-[#b95045]/10" : ""}`}>
@@ -252,16 +272,16 @@ function PriorityCard({ zone, rank }: { zone: Zone; rank: number }) {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <p className={`${data} text-[10px] tracking-[.14em] text-[#d7dfdb]`}>RESPONSE PRIORITY · {String(rank).padStart(2, "0")}</p>
-              <h3 className="mt-1.5 text-[17px] font-semibold text-[#f7f8f4]">{zone.name}</h3>
-              <p className="mt-1 text-[13px] leading-5 text-[#d2dad6]">{zone.hazard}</p>
+              <h3 className="mt-1.5 text-[17px] font-semibold text-[#f7f8f4]">{item.zone_name}</h3>
+              <p className="mt-1 text-[13px] leading-5 text-[#d2dad6]">{item.primary_hazard}</p>
             </div>
-            <StatusBadge status={zone.status} compact />
+            <StatusBadge status={item.status} compact />
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <Metric label="LIVE RISK" value={`${zone.risk}/100`} highlight={isTopPriority} />
-            <Metric label="OCCUPANCY" value={`${zone.occupancy} present`} />
-            <Metric label="TIME ACTIVE" value={isTopPriority ? "18 min" : "15 min"} />
+            <Metric label="LIVE RISK" value={`${item.risk_score}/100`} highlight={isTopPriority} />
+            <Metric label="OCCUPANCY" value={item.occupancy ? "Present" : "Clear"} />
+            <Metric label="TIME ACTIVE" value={`${Math.round(item.critical_duration_seconds / 60)} min`} />
           </div>
 
           <div className={`mt-4 rounded-xl border p-3.5 ${isTopPriority ? "border-[#b95045]/18 bg-[#b95045]/[.055]" : "border-white/[.07] bg-white/[.025]"}`}>
@@ -270,7 +290,7 @@ function PriorityCard({ zone, rank }: { zone: Zone; rank: number }) {
           </div>
 
           <button
-            onClick={() => nav(`/zones/${zone.id}`)}
+            onClick={() => nav(`/zones/${item.zone_id}`)}
             className="mt-4 flex items-center gap-1.5 text-[13px] font-medium text-[#efc987] transition hover:text-white"
           >
             Open live zone details <ChevronRight size={14} />
@@ -290,9 +310,34 @@ function Metric({ label, value, highlight = false }: { label: string; value: str
   );
 }
 
-function PriorityQueue() { const { zones } = useMappedData(); return <div><PageIntro eyebrow="MULTI-ZONE ESCALATION" title="Priority response queue">Two CRITICAL zones are ranked using transparent operational criteria.</PageIntro><div className="space-y-3">{zones.filter((z) => z.status === "CRITICAL").map((z, i) => <PriorityCard zone={z} rank={i+1} key={z.id}/>)}</div><div className={`${shell} mt-5 rounded-2xl p-5`}><p className={`${data} text-[12px] tracking-[.14em] text-[#89918f]`}>RANKING METHOD</p><div className="mt-3 grid gap-3 sm:grid-cols-4">{[["01", "Life safety", "Fire, gas and occupancy"],["02", "Live risk", "Current safety score"],["03", "Escalation", "Score velocity and forecast"],["04", "Elapsed time", "Time without recovery"]].map(([n,t,c]) => <div key={n} className="border-l border-[#c8954f]/35 pl-3"><p className={`${data} text-[12px] text-[#d2b37e]`}>{n}</p><p className="mt-2 text-[13px] font-medium">{t}</p><p className="mt-1 text-[12px] text-[#777f83]">{c}</p></div>)}</div></div></div>; }
+function PriorityQueue() { const { priorityQueue } = useRobofusion(); return <div><PageIntro eyebrow="MULTI-ZONE ESCALATION" title="Priority response queue">Two CRITICAL zones are ranked using transparent operational criteria.</PageIntro><div className="space-y-3">{priorityQueue.map((item, i) => <PriorityCard item={item} rank={i+1} key={item.incident_id}/>)}</div><div className={`${shell} mt-5 rounded-2xl p-5`}><p className={`${data} text-[12px] tracking-[.14em] text-[#89918f]`}>RANKING METHOD</p><div className="mt-3 grid gap-3 sm:grid-cols-4">{[["01", "Life safety", "Fire, gas and occupancy"],["02", "Live risk", "Current safety score"],["03", "Escalation", "Score velocity and forecast"],["04", "Elapsed time", "Time without recovery"]].map(([n,t,c]) => <div key={n} className="border-l border-[#c8954f]/35 pl-3"><p className={`${data} text-[12px] text-[#d2b37e]`}>{n}</p><p className="mt-2 text-[13px] font-medium">{t}</p><p className="mt-1 text-[12px] text-[#777f83]">{c}</p></div>)}</div></div></div>; }
 
-function ZoneDetails() { const { zones, incidents } = useMappedData(); const { acknowledgeIncident, toggleOverride, user } = useRobofusion(); const { id = "server" } = useParams(); const nav = useNavigate(); const zone = zones.find((z) => z.id === id) ?? zones[0]; const [ack, setAck] = useState(false); const [override, setOverride] = useState(false); const role = user?.role === "ADMIN" ? "Admin" : "Security Staff"; const activeIncident = incidents.find(i => i.zoneId === zone.id && i.status !== "RESOLVED"); const icon = zone.icon; const Icon = icon; return <div><button onClick={() => nav(-1)} className="mb-5 flex items-center gap-1 text-[13px] text-[#939a9a] hover:text-white">‹ Back to command view</button><PageIntro eyebrow={`${zone.code} · ZONE DETAILS`} title={zone.name} action={<StatusBadge status={zone.status}/>}>Last telemetry update {zone.updated} · {zone.online ? "Secure gateway online" : "Gateway unavailable — data may be stale"}</PageIntro><div className="grid gap-5 xl:grid-cols-[1.05fr_.95fr]"><section className={`${shell} rounded-2xl p-5`}><div className="flex items-center gap-4"><span className="grid size-12 place-items-center rounded-xl border border-white/[.08] bg-white/[.04] text-[#d0d0c9]"><Icon size={22}/></span><div><p className={`${data} text-[12px] text-[#858d8e]`}>CURRENT LIVE RISK</p><p className="numeric-emphasis mt-1 text-3xl font-medium tracking-[-.04em]">{zone.online ? zone.risk : "—"}<span className="ml-1 text-sm text-[#7d8588]">/100</span></p></div><div className="ml-auto"><RiskRing value={zone.risk} status={zone.status}/></div></div><div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4"><Sensor icon={<Flame size={15}/>} label="FIRE" value={zone.fire}/><Sensor icon={<Waves size={15}/>} label="GAS" value={zone.gas}/><Sensor icon={<Droplets size={15}/>} label="WATER" value={zone.water}/><Sensor icon={<Users size={15}/>} label="PIR / OCC" value={`${zone.occupancy} detected`}/></div><div className="mt-5 rounded-xl border border-white/[.07] bg-black/[.13] p-4"><div className="flex justify-between"><p className={`${data} text-[11px] text-[#7d8588]`}>SENSOR HEALTH</p><span className={`flex items-center gap-1 text-[12px] ${zone.online ? "text-[#afc8a6]" : "text-[#a2aab0]"}`}>{zone.online ? <Wifi size={12}/> : <WifiOff size={12}/>}{zone.online ? "4/4 sensors reporting" : "0/4 sensors reporting"}</span></div><div className="mt-3 flex gap-1.5">{["Fire", "Gas", "Water", "PIR"].map((s) => <span key={s} className={`rounded-lg px-2 py-1 text-[11px] ${zone.online ? "bg-[#88a879]/[.1] text-[#b7ccaf]" : "bg-white/[.06] text-[#899196]"}`}>{s}</span>)}</div></div><div className="mt-5 flex flex-wrap gap-2"><button onClick={() => { if(activeIncident) { acknowledgeIncident(activeIncident.id).then(ok => ok && setAck(true)) } else { setAck(true) } }} disabled={ack || !activeIncident} className={`rounded-xl px-4 py-2.5 text-[13px] font-medium transition ${ack ? "bg-[#88a879]/20 text-[#b8cfaf]" : "bg-[#d6d1c5] text-[#1b1c1a] hover:bg-[#eeeae0]"}`}>{ack ? <span className="flex items-center gap-1"><Check size={13}/> Alert acknowledged</span> : "Acknowledge incident"}</button>{role === "Admin" && <button onClick={() => { toggleOverride(zone.code, override ? "CLEAR" : "SILENCE").then(ok => ok && setOverride(!override)) }} className={`rounded-xl border px-4 py-2.5 text-[13px] transition ${override ? "border-[#b95045]/50 bg-[#b95045]/15 text-[#e4a49b]" : "border-[#b95045]/30 text-[#dc9a90] hover:bg-[#b95045]/10"}`}><ShieldAlert className="mr-1 inline" size={13}/>{override ? "Override armed" : "Manual override"}</button>}</div>{role !== "Admin" && <p className="mt-3 text-[12px] text-[#777f83]">Manual override restricted to Admin role.</p>}</section><section className={`${shell} rounded-2xl p-5`}><p className={`${data} text-[12px] tracking-[.14em] text-[#89918f]`}>ZONE HISTORY</p><div className="mt-5 space-y-0">{[["10:42:18","CRITICAL","Smoke signal crossed emergency threshold"],["10:41:51","WARNING","Thermal array trend exceeded baseline"],["10:37:09","SAFE","Normal operating envelope"]].map(([time,state,detail], i) => <div key={time} className="relative flex gap-3 pb-5 last:pb-0"><span className={`mt-1.5 size-2 shrink-0 rounded-full ${i === 0 ? "bg-[#b95045] shadow-[0_0_0_4px_rgba(185,80,69,.13)]" : i === 1 ? "bg-[#c8954f]" : "bg-[#88a879]"}`}/>{i < 2 && <span className="absolute left-[3px] top-5 h-[calc(100%-8px)] w-px bg-white/[.09]"/>}<div className="flex-1"><div className="flex justify-between"><span className={`${data} text-[12px] text-[#c6c8c0]`}>{state}</span><span className={`${data} text-[11px] text-[#70787c]`}>{time}</span></div><p className="mt-1 text-[12px] text-[#858d8e]">{detail}</p></div></div>)}</div></section></div></div>; }
+function ZoneDetails() { 
+  const { zones, incidents } = useMappedData(); 
+  const { acknowledgeIncident, toggleOverride, user } = useRobofusion(); 
+  const { id = "server" } = useParams(); 
+  const nav = useNavigate(); 
+  const zone = zones.find((z) => z.id === id) ?? zones[0]; 
+  const [ack, setAck] = useState(false); 
+  const [override, setOverride] = useState(false); 
+  const role = user?.role === "ADMIN" ? "Admin" : "Security Staff"; 
+  const activeIncident = incidents.find(i => i.zoneId === zone.id && i.status !== "RESOLVED"); 
+  const icon = zone.icon; 
+  const Icon = icon; 
+  
+  const [timeline, setTimeline] = useState<any[]>([]);
+  useEffect(() => {
+    if (activeIncident) {
+      fetch(`/api/v1/incidents/${activeIncident.id}/timeline`)
+        .then(r => r.json())
+        .then(d => setTimeline(d.events || []))
+        .catch(console.error);
+    } else {
+      setTimeline([]);
+    }
+  }, [activeIncident?.id]);
+
+  return <div><button onClick={() => nav(-1)} className="mb-5 flex items-center gap-1 text-[13px] text-[#939a9a] hover:text-white">‹ Back to command view</button><PageIntro eyebrow={`${zone.code} · ZONE DETAILS`} title={zone.name} action={<StatusBadge status={zone.status}/>}>Last telemetry update {zone.updated} · {zone.online ? "Secure gateway online" : "Gateway unavailable — data may be stale"}</PageIntro><div className="grid gap-5 xl:grid-cols-[1.05fr_.95fr]"><section className={`${shell} rounded-2xl p-5`}><div className="flex items-center gap-4"><span className="grid size-12 place-items-center rounded-xl border border-white/[.08] bg-white/[.04] text-[#d0d0c9]"><Icon size={22}/></span><div><p className={`${data} text-[12px] text-[#858d8e]`}>CURRENT LIVE RISK</p><p className="numeric-emphasis mt-1 text-3xl font-medium tracking-[-.04em]">{zone.online ? zone.risk : "—"}<span className="ml-1 text-sm text-[#7d8588]">/100</span></p></div><div className="ml-auto"><RiskRing value={zone.risk} status={zone.status}/></div></div><div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4"><Sensor icon={<Flame size={15}/>} label="FIRE" value={zone.fire}/><Sensor icon={<Waves size={15}/>} label="GAS" value={zone.gas}/><Sensor icon={<Droplets size={15}/>} label="WATER" value={zone.water}/><Sensor icon={<Users size={15}/>} label="PIR / OCC" value={`${zone.occupancy} detected`}/></div><div className="mt-5 rounded-xl border border-white/[.07] bg-black/[.13] p-4"><div className="flex justify-between"><p className={`${data} text-[11px] text-[#7d8588]`}>SENSOR HEALTH</p><span className={`flex items-center gap-1 text-[12px] ${zone.online ? "text-[#afc8a6]" : "text-[#a2aab0]"}`}>{zone.online ? <Wifi size={12}/> : <WifiOff size={12}/>}{zone.online ? "4/4 sensors reporting" : "0/4 sensors reporting"}</span></div><div className="mt-3 flex gap-1.5">{["Fire", "Gas", "Water", "PIR"].map((s) => <span key={s} className={`rounded-lg px-2 py-1 text-[11px] ${zone.online ? "bg-[#88a879]/[.1] text-[#b7ccaf]" : "bg-white/[.06] text-[#899196]"}`}>{s}</span>)}</div></div><div className="mt-5 flex flex-wrap gap-2"><button onClick={() => { if(activeIncident) { acknowledgeIncident(activeIncident.id).then(ok => ok && setAck(true)) } else { setAck(true) } }} disabled={ack || !activeIncident} className={`rounded-xl px-4 py-2.5 text-[13px] font-medium transition ${ack ? "bg-[#88a879]/20 text-[#b8cfaf]" : "bg-[#d6d1c5] text-[#1b1c1a] hover:bg-[#eeeae0]"}`}>{ack ? <span className="flex items-center gap-1"><Check size={13}/> Alert acknowledged</span> : "Acknowledge incident"}</button>{role === "Admin" && <button onClick={() => { toggleOverride(zone.code, override ? "CLEAR" : "SILENCE").then(ok => ok && setOverride(!override)) }} className={`rounded-xl border px-4 py-2.5 text-[13px] transition ${override ? "border-[#b95045]/50 bg-[#b95045]/15 text-[#e4a49b]" : "border-[#b95045]/30 text-[#dc9a90] hover:bg-[#b95045]/10"}`}><ShieldAlert className="mr-1 inline" size={13}/>{override ? "Override armed" : "Manual override"}</button>}</div>{role !== "Admin" && <p className="mt-3 text-[12px] text-[#777f83]">Manual override restricted to Admin role.</p>}</section><section className={`${shell} rounded-2xl p-5`}><p className={`${data} text-[12px] tracking-[.14em] text-[#89918f]`}>ZONE HISTORY</p><div className="mt-5 space-y-0">{timeline.length ? timeline.map((event, i) => <div key={event.id} className="relative flex gap-3 pb-5 last:pb-0"><span className={`mt-1.5 size-2 shrink-0 rounded-full ${i === 0 ? "bg-[#b95045] shadow-[0_0_0_4px_rgba(185,80,69,.13)]" : i === 1 ? "bg-[#c8954f]" : "bg-[#88a879]"}`}/>{i < timeline.length - 1 && <span className="absolute left-[3px] top-5 h-[calc(100%-8px)] w-px bg-white/[.09]"/>}<div className="flex-1"><div className="flex justify-between"><span className={`${data} text-[12px] text-[#c6c8c0]`}>{event.type}</span><span className={`${data} text-[11px] text-[#70787c]`}>{new Date(event.timestamp).toLocaleTimeString()}</span></div><p className="mt-1 text-[12px] text-[#858d8e]">{event.description || JSON.stringify(event.payload)}</p></div></div>) : <p className="text-[13px] text-[#70787c]">No active incident timeline events found.</p>}</div></section></div></div>; }
 function Sensor({icon,label,value}:{icon:ReactNode;label:string;value:string}){return <div className="rounded-xl border border-white/[.065] bg-white/[.025] p-3"><span className="text-[#a7aaa3]">{icon}</span><p className={`${data} mt-3 text-[10px] text-[#71797c]`}>{label}</p><p className="numeric-emphasis mt-1 text-[13px] text-[#d4d3cd]">{value}</p></div>;}
 
 function Incidents() { const { incidents, zones } = useMappedData(); const navigate = useNavigate(); const [filters, setFilters] = useState({ zone: "All zones", hazard: "All hazards", status: "All statuses" }); const filtered = useMemo(() => incidents.filter(i => (filters.zone === "All zones" || i.zone === filters.zone) && (filters.hazard === "All hazards" || i.hazard === filters.hazard) && (filters.status === "All statuses" || i.status === filters.status)), [filters, incidents]); return <div><PageIntro eyebrow="TIMELINE & HISTORY" title="Incident register" action={<div className="flex items-center gap-2 rounded-xl border border-white/[.08] bg-white/[.025] px-3 py-2 text-[13px] text-[#8d9496]"><Search size={14}/> Search incident</div>}>Review active and resolved incidents with a complete trigger → acknowledgement → recovery trail.</PageIntro><div className={`${shell} rounded-2xl overflow-hidden`}><div className="flex flex-wrap gap-2 border-b border-white/[.065] p-3"><select className="rounded-lg border border-white/[.08] bg-[#121713] px-2.5 py-2 text-[12px] text-[#c5c6c0] outline-none"><option>DATE · Last 24 hours</option><option>DATE · Last 7 days</option></select>{[["zone", ["All zones", ...zones.map(z=>z.name)]],["hazard", ["All hazards", ...Array.from(new Set(incidents.map(i=>i.hazard)))]],["status", ["All statuses", "CRITICAL", "WARNING", "RESOLVED"]]].map(([key, values]) => <select key={key as string} value={filters[key as keyof typeof filters]} onChange={e=>setFilters({...filters,[key as string]:e.target.value})} className="rounded-lg border border-white/[.08] bg-[#121713] px-2.5 py-2 text-[12px] text-[#c5c6c0] outline-none">{(values as string[]).map(v=><option key={v}>{v}</option>)}</select>)}</div><div className="overflow-x-auto"><table className="min-w-[920px] w-full text-left"><thead className="border-b border-white/[.065] bg-white/[.018]"><tr>{["INCIDENT ID", "ZONE", "HAZARD", "TRIGGER TIME", "ACKNOWLEDGED BY", "RESOLVED", "DURATION", "STATUS"].map(h=><th key={h} className={`${data} px-4 py-3 text-[11px] font-medium text-[#737b7e]`}>{h}</th>)}</tr></thead><tbody>{filtered.length ? filtered.map((i) => <tr key={i.id} onClick={() => navigate(`/incidents/${i.id}`)} className="cursor-pointer border-b border-white/[.055] transition hover:bg-white/[.035]"><td className={`${data} numeric-emphasis px-4 py-4 text-[12px] text-[#d8bb85]`}>{i.id}</td><td className="px-4 py-4 text-[13px] font-medium">{i.zone}</td><td className="px-4 py-4 text-[13px] text-[#a8adab]">{i.hazard}</td><td className={`${data} px-4 py-4 text-[11px] text-[#969d9e]`}>{i.trigger}</td><td className="px-4 py-4 text-[12px] text-[#aeb2af]">{i.acknowledged}</td><td className={`${data} px-4 py-4 text-[11px] text-[#858d8e]`}>{i.resolved}</td><td className={`${data} numeric-emphasis px-4 py-4 text-[11px] text-[#b4b7b0]`}>{i.duration}</td><td className="px-4 py-4">{i.status === "RESOLVED" ? <span className="text-[12px] text-[#b4cdaa]">✓ RESOLVED</span> : <StatusBadge status={i.status as Status} compact/>}</td></tr>) : <tr><td colSpan={8} className="px-5 py-16 text-center text-[13px] text-[#7d8588]"><CircleX className="mx-auto mb-2" size={19}/>No incidents match the selected filters.</td></tr>}</tbody></table></div></div></div>; }

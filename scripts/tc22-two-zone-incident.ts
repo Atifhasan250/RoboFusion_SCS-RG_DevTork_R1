@@ -27,7 +27,11 @@ async function prepare() {
       id: `tc22-${code}`, code, name: code.replaceAll("_", " "), configured: true,
       apiKeyHash: hashSecret(`${code}-demo-key`, env.ZONE_API_KEY_PEPPER),
       state: "SAFE", riskScore: 0, primaryHazard: null, occupancy: false, cameraOccupancy: false,
-      connectivityState: "OFFLINE", lastReadingAt: null, lastSequence: null, commandVersion: 0,
+      connectivityState: "OFFLINE",
+      lastReadingAt: null,
+      lastReceivedAt: null,
+      lastSequence: null,
+      commandVersion: 0,
       createdAt: now, updatedAt: now,
     });
   }

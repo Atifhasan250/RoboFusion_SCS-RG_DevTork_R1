@@ -3,7 +3,7 @@ import { realtime } from "../realtime/hub";
 import { id } from "../utils/id";
 
 /** Mark zones stale by transport timeout without changing their last known safety/risk state. */
-export async function markOfflineZones(maxAgeMs = 10_000) {
+export async function markOfflineZones(maxAgeMs = 30_000) {
   const c = await collections();
   const now = new Date();
   const cutoff = new Date(now.getTime() - maxAgeMs);
@@ -11,9 +11,9 @@ export async function markOfflineZones(maxAgeMs = 10_000) {
     configured: true,
     connectivityState: { $ne: "OFFLINE" },
     $or: [
-      { lastReadingAt: { $lt: cutoff } },
-      { lastReadingAt: null, createdAt: { $lt: cutoff } },
-      { lastReadingAt: { $exists: false }, createdAt: { $lt: cutoff } },
+      { lastReceivedAt: { $lt: cutoff } },
+      { lastReceivedAt: null, createdAt: { $lt: cutoff } },
+      { lastReceivedAt: { $exists: false }, createdAt: { $lt: cutoff } },
     ],
   }).toArray();
 
@@ -28,9 +28,9 @@ export async function markOfflineZones(maxAgeMs = 10_000) {
         configured: true,
         connectivityState: { $ne: "OFFLINE" },
         $or: [
-          { lastReadingAt: { $lt: cutoff } },
-          { lastReadingAt: null, createdAt: { $lt: cutoff } },
-          { lastReadingAt: { $exists: false }, createdAt: { $lt: cutoff } },
+          { lastReceivedAt: { $lt: cutoff } },
+          { lastReceivedAt: null, createdAt: { $lt: cutoff } },
+          { lastReceivedAt: { $exists: false }, createdAt: { $lt: cutoff } },
         ],
       },
       { $set: { connectivityState: "OFFLINE", updatedAt: now } },

@@ -23,7 +23,10 @@ async function reset() {
     id: `edge-${code}`, code, name: code.replaceAll("_", " "), configured: true,
     apiKeyHash: hashSecret(`${code}-demo-key`, env.ZONE_API_KEY_PEPPER),
     state: "SAFE" as const, riskScore: 0, primaryHazard: null, occupancy: false, cameraOccupancy: false,
-    connectivityState: "OFFLINE" as const, lastReadingAt: null, lastSequence: null, commandVersion: 0,
+    connectivityState: "OFFLINE" as const,
+    lastReadingAt: null,
+    lastReceivedAt: null,
+    lastSequence: null, commandVersion: 0,
     createdAt: now, updatedAt: now,
   })));
 }

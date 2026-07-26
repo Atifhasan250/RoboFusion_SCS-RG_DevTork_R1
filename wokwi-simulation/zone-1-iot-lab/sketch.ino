@@ -28,8 +28,8 @@ unsigned long sequence = 1;
 unsigned long lastReadingTime = 0;
 unsigned long lastCommandTime = 0;
 unsigned long lastReconnectAttempt = 0;
-const unsigned long READING_INTERVAL = 200;
-const unsigned long COMMAND_INTERVAL = 250;
+const unsigned long READING_INTERVAL = 1000;
+const unsigned long COMMAND_INTERVAL = 3000;
 const unsigned long RECONNECT_INTERVAL = 5000;
 long lastAppliedCommandVersion = -1;
 

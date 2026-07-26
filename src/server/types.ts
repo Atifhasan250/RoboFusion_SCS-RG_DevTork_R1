@@ -53,6 +53,7 @@ export interface Zone {
   cameraOccupancy?: boolean;
   connectivityState: ConnectivityState;
   lastReadingAt: Date | null;
+  lastReceivedAt: Date | null;
   lastSequence: number | null;
   commandVersion: number;
   createdAt: Date;

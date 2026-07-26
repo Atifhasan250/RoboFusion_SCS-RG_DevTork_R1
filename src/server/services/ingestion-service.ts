@@ -480,6 +480,7 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload): Pr
           cameraOccupancy: data.cameraOccupancy ?? zone.cameraOccupancy ?? false,
           connectivityState,
           lastReadingAt: data.timestamp,
+          lastReceivedAt: now,
           lastSequence: data.sequence,
           updatedAt: now,
         } },

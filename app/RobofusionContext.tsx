@@ -19,6 +19,8 @@ export interface RobofusionState {
   csrfToken: string | null;
   wsStatus: WsStatus;
   notifications: NotificationItem[];
+  priorityQueue: any[];
+  systemHealth: any;
   
   login: (email: string, pass: string) => Promise<boolean>;
   logout: () => Promise<void>;
@@ -44,6 +46,8 @@ export function RobofusionProvider({ children }: { children: ReactNode }) {
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [wsStatus, setWsStatus] = useState<WsStatus>("CONNECTING");
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [priorityQueue, setPriorityQueue] = useState<any[]>([]);
+  const [systemHealth, setSystemHealth] = useState<any>(null);
   
   const addNotification = useCallback((type: NotificationType, message: string) => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -93,6 +97,11 @@ export function RobofusionProvider({ children }: { children: ReactNode }) {
         if (payload.event_type === "SNAPSHOT") {
           setZones(payload.data.zones || []);
           setIncidents(payload.data.incidents || []);
+          if (payload.data.priority_queue) setPriorityQueue(payload.data.priority_queue);
+        } else if (payload.event_type === "ZONE_CONNECTIVITY_CHANGED") {
+          setZones(prev => prev.map(z => z.id === payload.data.zone_id ? { ...z, connectivityState: payload.data.connectivity_state } : z));
+        } else if (payload.event_type === "PRIORITY_QUEUE_UPDATED") {
+          if (payload.data?.queue) setPriorityQueue(payload.data.queue);
         } else {
           // Merge partial updates
           if (payload.data?.zone) {
@@ -131,9 +140,25 @@ export function RobofusionProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const fetchSnapshot = useCallback(async () => {
+    try {
+      const res = await fetch("/api/v1/dashboard/snapshot");
+      if (res.ok) {
+        const data = await res.json();
+        setZones(data.zones || []);
+        setIncidents(data.incidents || []);
+        setPriorityQueue(data.priority_queue || []);
+        setSystemHealth(data.system_health || null);
+      }
+    } catch (e) {
+      console.error("Snapshot fetch error", e);
+    }
+  }, []);
+
   useEffect(() => {
     // Only connect if we have a user (authenticated)
     if (user) {
+      fetchSnapshot();
       connectWs();
     } else {
       if (wsRef.current) {
@@ -142,11 +167,23 @@ export function RobofusionProvider({ children }: { children: ReactNode }) {
       }
       setWsStatus("OFFLINE");
     }
+    
+    // Add polling fallback for snapshot
+    let interval: number;
+    if (user) {
+      interval = window.setInterval(() => {
+        if (wsStatus === "OFFLINE" || wsStatus === "RECONNECTING") {
+          fetchSnapshot();
+        }
+      }, 5000);
+    }
+
     return () => {
       if (wsRef.current) wsRef.current.close();
       if (reconnectTimer.current) window.clearTimeout(reconnectTimer.current);
+      if (interval) window.clearInterval(interval);
     };
-  }, [user, connectWs]);
+  }, [user, connectWs, fetchSnapshot, wsStatus]);
 
   const apiHeaders = useCallback(() => ({
     "Content-Type": "application/json",
@@ -235,10 +272,12 @@ export function RobofusionProvider({ children }: { children: ReactNode }) {
 
   const toggleOverride = async (zoneCode: string, action: string) => {
     try {
-      const res = await fetch(`/api/v1/admin/override`, {
-        method: "POST",
+      const isClear = action === "CLEAR";
+      const url = isClear ? `/api/v1/admin/override?zone=${zoneCode}` : `/api/v1/admin/override`;
+      const res = await fetch(url, {
+        method: isClear ? "DELETE" : "POST",
         headers: apiHeaders(),
-        body: JSON.stringify({ zoneCode, action, reason: "Manual override triggered from UI" })
+        ...(isClear ? {} : { body: JSON.stringify({ zoneCode, action, reason: "Manual override triggered from UI" }) })
       });
       if (res.ok) {
         addNotification("success", `Override action '${action}' applied to ${zoneCode}.`);
@@ -253,7 +292,7 @@ export function RobofusionProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <Context.Provider value={{ zones, incidents, user, csrfToken, wsStatus, notifications, login, logout, acknowledgeIncident, reportNote, toggleOverride, addNotification, removeNotification }}>
+    <Context.Provider value={{ zones, incidents, user, csrfToken, wsStatus, notifications, priorityQueue, systemHealth, login, logout, acknowledgeIncident, reportNote, toggleOverride, addNotification, removeNotification }}>
       {children}
     </Context.Provider>
   );

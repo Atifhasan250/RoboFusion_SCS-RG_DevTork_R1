@@ -23,7 +23,7 @@ async function prepare() {
   await c.zones.insertMany(ZONES.map(code => ({
     id: `concurrency-${code}`,
     code,
-    name: code.replaceAll("_", " "),
+    name: code.replace(/_/g, " "),
     configured: true,
     apiKeyHash: hashSecret(`${code}-demo-key`, env.ZONE_API_KEY_PEPPER),
     state: "SAFE" as const,
@@ -33,6 +33,7 @@ async function prepare() {
     cameraOccupancy: false,
     connectivityState: "OFFLINE" as const,
     lastReadingAt: null,
+    lastReceivedAt: null,
     lastSequence: null,
     commandVersion: 0,
     createdAt: now,

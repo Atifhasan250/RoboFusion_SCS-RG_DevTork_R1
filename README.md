@@ -4,7 +4,7 @@
 **Track:** Track B — Wokwi simulation  
 **Implemented scope in this archive:** five-zone sensing firmware, backend/API, MongoDB Atlas schema, incident/ranking logic, database tooling, resilience and integration tests.
 
-> The frontend dashboard, final submission PDF and demonstration video are intentionally outside this archive's requested fix scope.
+> The final submission PDF and demonstration video are intentionally outside this archive's requested fix scope.
 
 ## Official five zones
 
@@ -186,9 +186,8 @@ npm run db:seed:verify
 
 This archive does not claim completion of:
 
-- Frontend Command Dashboard test cases
 - Final submission documentation PDF
 - Seven-minute demonstration video
 - Actual ESP32-CAM image/frame processing
 
-Those omissions are explicit rather than hidden. Backend, database and five-zone Wokwi work can be integrated with the frontend later without changing the API contract.
+Those omissions are explicit rather than hidden. Backend, database, frontend dashboard, and five-zone Wokwi work are integrated.
