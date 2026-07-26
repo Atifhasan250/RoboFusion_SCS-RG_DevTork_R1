@@ -148,6 +148,8 @@ bool sendPostRequest(const String& requestBody, bool isQueued) {
       Serial.printf("Reading API error %d: %s\n", code, responseBody.c_str());
     } else {
       Serial.printf("Reading API connection failed, code %d: %s\n", code, http.errorToString(code).c_str());
+      http.end();
+      initialized = false;
     }
   }
   return success;
@@ -252,6 +254,9 @@ void fetchCommands() {
     if (deserializeJson(response, responseBody) == DeserializationError::Ok) {
       processCommand(response.as<JsonVariantConst>());
     }
+  } else if (code < 0) {
+    http.end();
+    initialized = false;
   }
 }
 
