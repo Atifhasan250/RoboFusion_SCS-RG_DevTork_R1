@@ -5,7 +5,8 @@ import { collections } from "@/src/server/db/collections";
 export const runtime = "nodejs";
 
 /** GET /api/v1/admin/system-health — System health for Admin users */
-export async function GET(_request: NextRequest) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function GET(_: NextRequest) {
   try {
     await requireUser(["ADMIN"]);
     const c = await collections();

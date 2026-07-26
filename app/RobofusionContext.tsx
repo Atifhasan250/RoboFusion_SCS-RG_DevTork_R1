@@ -1,32 +1,194 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useRef, useCallback, ReactNode } from "react";
-import type { Zone, Incident, User, Role } from "@/src/server/types";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
-type WsStatus = "CONNECTING" | "CONNECTED" | "RECONNECTING" | "OFFLINE";
+export type Role = "ADMIN" | "SECURITY_STAFF";
+export type SafetyState = "SAFE" | "WARNING" | "CRITICAL";
+export type ConnectivityState = "ONLINE" | "DEGRADED" | "OFFLINE" | "NOT_CONFIGURED";
+export type HazardType = "FIRE" | "GAS" | "FLOOD" | "OCCUPANCY" | "NONE";
+export type WsStatus = "CONNECTING" | "CONNECTED" | "RECONNECTING" | "OFFLINE";
 
-export type NotificationType = "success" | "error" | "info";
+export interface DashboardSensor {
+  id: string;
+  sensorType: "FIRE" | "GAS" | "WATER" | "PIR" | "CAMERA";
+  status: "ONLINE" | "OFFLINE" | "DEGRADED" | "WARMING_UP" | "NOT_CONFIGURED";
+  lastSeenAt: string | null;
+  warmupSeconds: number;
+}
+
+export interface DashboardZone {
+  id: string;
+  code: string;
+  name: string;
+  configured: boolean;
+  state: SafetyState;
+  riskScore: number;
+  primaryHazard: HazardType | null;
+  occupancy: boolean;
+  cameraOccupancy?: boolean;
+  connectivityState: ConnectivityState;
+  lastReadingAt: string | null;
+  lastObservedAt?: string | null;
+  lastReceivedAt?: string | null;
+  lastSequence: number | null;
+  commandVersion: number;
+  riskComponents?: { fire: number; gas: number; water: number; occupancy: number };
+  recentRiskScores?: number[];
+  isTrendingCritical?: boolean;
+  warningSince?: string | null;
+  criticalSince?: string | null;
+  stateVersion?: number;
+  sensors?: DashboardSensor[];
+  prediction?: {
+    probability: number;
+    horizonMinutes: number;
+    modelVersion: string;
+    advisoryOnly: true;
+    predictedAt: string;
+  } | null;
+}
+
+export interface IncidentRecord {
+  id: string;
+  zoneId: string;
+  status: "OPEN" | "ACKNOWLEDGED" | "RESOLVED";
+  active: boolean;
+  severity: "CRITICAL";
+  primaryHazard: HazardType;
+  initialRiskScore: number;
+  peakRiskScore: number;
+  startedAt: string;
+  acknowledgedAt?: string | null;
+  acknowledgedBy?: string | null;
+  resolvedAt?: string | null;
+  resolutionReason?: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PriorityItem {
+  rank: number;
+  incident_id: string;
+  zone_id: string;
+  zone_code: string;
+  zone_name: string;
+  status: "OPEN" | "ACKNOWLEDGED";
+  risk_score: number;
+  priority_score: number;
+  occupancy: boolean;
+  critical_duration_seconds: number;
+  primary_hazard: HazardType;
+  started_at: string;
+  acknowledged_at?: string | null;
+  nlp_advisory_bonus: number;
+  ranking_reason: string;
+}
+
+export interface SystemHealth {
+  configured_zones: number;
+  online_zones: number;
+  degraded_zones?: number;
+  offline_zones: number;
+  critical_zones: number;
+  warning_zones: number;
+  safe_zones: number;
+  open_incidents: number;
+  acknowledged_incidents: number;
+}
+
+export interface IncidentTimelineEvent {
+  id: string;
+  incidentId: string | null;
+  zoneId: string;
+  eventType: string;
+  eventSource: string;
+  actorUserId: string | null;
+  description: string;
+  metadata: Record<string, unknown>;
+  occurredAt: string;
+}
+
+export interface ZoneDetailsPayload {
+  zone: DashboardZone;
+  sensors: DashboardSensor[];
+  events: IncidentTimelineEvent[];
+  trend: { status: string; slope: number; window: number; latestRisk?: number };
+  prediction: {
+    probability: number;
+    modelVersion: string;
+    advisoryOnly: true;
+    horizonMinutes: number;
+    predictedAt: string;
+    liveRiskScore: number;
+    featureSnapshot: Record<string, number>;
+  } | null;
+  readings: Array<{
+    id: string;
+    observedAt: string;
+    receivedAt: string;
+    fire: boolean;
+    gas: number;
+    water: number;
+    pir: boolean;
+    riskScore: number;
+    calculatedState: SafetyState;
+    primaryHazard: HazardType;
+    sensorHealth: string;
+  }>;
+  raw_readings_visible: boolean;
+  prediction_safety: string;
+}
+
+export type NotificationType = "success" | "error" | "info" | "critical";
 export interface NotificationItem {
   id: string;
   type: NotificationType;
   message: string;
 }
 
+interface IncidentQuery {
+  status?: "active" | "resolved" | "all" | "OPEN" | "ACKNOWLEDGED" | "RESOLVED";
+  zoneId?: string;
+  zoneCode?: string;
+  hazard?: HazardType;
+  from?: string;
+  to?: string;
+}
+
 export interface RobofusionState {
-  zones: Zone[];
-  incidents: Incident[];
+  zones: DashboardZone[];
+  activeIncidents: IncidentRecord[];
+  incidents: IncidentRecord[];
+  priorityQueue: PriorityItem[];
+  systemHealth: SystemHealth | null;
   user: { id: string; name: string; email: string; role: Role } | null;
   csrfToken: string | null;
+  authChecked: boolean;
+  dataLoading: boolean;
   wsStatus: WsStatus;
+  lastSyncAt: string | null;
   notifications: NotificationItem[];
-  priorityQueue: any[];
-  systemHealth: any;
-  
-  login: (email: string, pass: string) => Promise<boolean>;
+
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  refreshSnapshot: (silent?: boolean) => Promise<void>;
+  queryIncidents: (query?: IncidentQuery) => Promise<IncidentRecord[]>;
+  fetchIncidentTimeline: (incidentId: string) => Promise<{ incident: IncidentRecord; events: IncidentTimelineEvent[] } | null>;
+  fetchZoneDetails: (zoneCode: string) => Promise<ZoneDetailsPayload | null>;
+  fetchAdminHealth: () => Promise<Record<string, unknown> | null>;
   acknowledgeIncident: (incidentId: string) => Promise<boolean>;
-  reportNote: (text: string) => Promise<{ validated: boolean, message?: string }>;
-  toggleOverride: (zoneCode: string, action: string) => Promise<boolean>;
+  reportNote: (text: string) => Promise<{ validated: boolean; message?: string; data?: Record<string, unknown> }>;
+  applyOverride: (zoneCode: string, action: "SILENCE" | "RESET" | "TEST_ACTUATOR") => Promise<boolean>;
+  clearOverride: (zoneCode: string) => Promise<boolean>;
   addNotification: (type: NotificationType, message: string) => void;
   removeNotification: (id: string) => void;
 }
@@ -34,269 +196,533 @@ export interface RobofusionState {
 const Context = createContext<RobofusionState | null>(null);
 
 export function useRobofusion() {
-  const ctx = useContext(Context);
-  if (!ctx) throw new Error("useRobofusion must be used within RobofusionProvider");
-  return ctx;
+  const context = useContext(Context);
+  if (!context) throw new Error("useRobofusion must be used within RobofusionProvider");
+  return context;
+}
+
+async function responseJson<T>(response: Response): Promise<T> {
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = (body as { message?: string; error?: string }).message
+      ?? (body as { error?: string }).error
+      ?? `Request failed (${response.status})`;
+    throw Object.assign(new Error(message), { status: response.status, body });
+  }
+  return body as T;
+}
+
+function playCriticalTone() {
+  if (typeof window === "undefined") return;
+  try {
+    const AudioContextCtor = window.AudioContext
+      ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) return;
+    const context = new AudioContextCtor();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.value = 880;
+    gain.gain.setValueAtTime(0.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.18);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.2);
+    oscillator.addEventListener("ended", () => void context.close());
+  } catch {
+    // Browsers may block audio before an interaction; visual alerts still remain.
+  }
 }
 
 export function RobofusionProvider({ children }: { children: ReactNode }) {
-  const [zones, setZones] = useState<Zone[]>([]);
-  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [zones, setZones] = useState<DashboardZone[]>([]);
+  const [activeIncidents, setActiveIncidents] = useState<IncidentRecord[]>([]);
+  const [incidents, setIncidents] = useState<IncidentRecord[]>([]);
+  const [priorityQueue, setPriorityQueue] = useState<PriorityItem[]>([]);
+  const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const [user, setUser] = useState<RobofusionState["user"]>(null);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
-  const [wsStatus, setWsStatus] = useState<WsStatus>("CONNECTING");
+  const [authChecked, setAuthChecked] = useState(false);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [wsStatus, setWsStatus] = useState<WsStatus>("OFFLINE");
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [priorityQueue, setPriorityQueue] = useState<any[]>([]);
-  const [systemHealth, setSystemHealth] = useState<any>(null);
-  
-  const addNotification = useCallback((type: NotificationType, message: string) => {
-    const id = Math.random().toString(36).substring(2, 9);
-    setNotifications(prev => [...prev, { id, type, message }]);
-    setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 5000);
-  }, []);
-  
-  const removeNotification = useCallback((id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  }, []);
-  
+
+  const userRef = useRef(user);
+  const csrfRef = useRef(csrfToken);
+  const zonesRef = useRef(zones);
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectAttempts = useRef(0);
-  const reconnectTimer = useRef<number | null>(null);
-  const [hydrated, setHydrated] = useState(false);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const intentionalCloseRef = useRef(false);
+  const notifiedIncidentIdsRef = useRef(new Set<string>());
+  const refreshDebounceRef = useRef<number | null>(null);
+  const connectWebSocketRef = useRef<() => void>(() => undefined);
 
-  // Initialize auth from session storage if possible
-  useEffect(() => {
-    const storedAuth = sessionStorage.getItem("scs-user");
-    const storedCsrf = sessionStorage.getItem("scs-csrf");
-    if (storedAuth && storedCsrf) {
-      try {
-        setUser(JSON.parse(storedAuth));
-        setCsrfToken(storedCsrf);
-      } catch (e) {}
+  useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => { csrfRef.current = csrfToken; }, [csrfToken]);
+  useEffect(() => { zonesRef.current = zones; }, [zones]);
+
+  const addNotification = useCallback((type: NotificationType, message: string) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setNotifications(previous => [...previous, { id, type, message }]);
+    const timeout = type === "critical" ? 9000 : 5000;
+    window.setTimeout(() => {
+      setNotifications(previous => previous.filter(notification => notification.id !== id));
+    }, timeout);
+  }, []);
+
+  const removeNotification = useCallback((id: string) => {
+    setNotifications(previous => previous.filter(notification => notification.id !== id));
+  }, []);
+
+  const clearLocalAuth = useCallback(() => {
+    setUser(null);
+    setCsrfToken(null);
+    setZones([]);
+    setActiveIncidents([]);
+    setIncidents([]);
+    setPriorityQueue([]);
+    setSystemHealth(null);
+    notifiedIncidentIdsRef.current.clear();
+    sessionStorage.removeItem("scs-user");
+    sessionStorage.removeItem("scs-csrf");
+  }, []);
+
+  const notifyOpenIncidents = useCallback((nextIncidents: IncidentRecord[], nextZones: DashboardZone[]) => {
+    for (const incident of nextIncidents) {
+      if (incident.status !== "OPEN" || notifiedIncidentIdsRef.current.has(incident.id)) continue;
+      notifiedIncidentIdsRef.current.add(incident.id);
+      const zone = nextZones.find(item => item.id === incident.zoneId);
+      addNotification(
+        "critical",
+        `${zone?.name ?? incident.zoneId}: ${incident.primaryHazard} incident requires acknowledgement.`,
+      );
+      playCriticalTone();
     }
-    setHydrated(true);
-  }, []);
+  }, [addNotification]);
 
-  const connectWs = useCallback(() => {
-    if (typeof window === "undefined") return;
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+  const applySnapshot = useCallback((snapshot: {
+    snapshot_at?: string;
+    zones?: DashboardZone[];
+    incidents?: IncidentRecord[];
+    priority_queue?: PriorityItem[];
+    system_health?: SystemHealth;
+  }) => {
+    const nextZones = snapshot.zones ?? [];
+    const nextActive = snapshot.incidents ?? [];
+    setZones(nextZones);
+    setActiveIncidents(nextActive);
+    setPriorityQueue(snapshot.priority_queue ?? []);
+    if (snapshot.system_health) setSystemHealth(snapshot.system_health);
+    setLastSyncAt(snapshot.snapshot_at ?? new Date().toISOString());
+    notifyOpenIncidents(nextActive, nextZones);
+  }, [notifyOpenIncidents]);
 
-    setWsStatus(prev => prev === "OFFLINE" ? "RECONNECTING" : prev);
-    
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setWsStatus("CONNECTED");
-      reconnectAttempts.current = 0;
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload.event_type === "SNAPSHOT") {
-          setZones(payload.data.zones || []);
-          setIncidents(payload.data.incidents || []);
-          if (payload.data.priority_queue) setPriorityQueue(payload.data.priority_queue);
-        } else if (payload.event_type === "ZONE_CONNECTIVITY_CHANGED") {
-          setZones(prev => prev.map(z => z.id === payload.data.zone_id ? { ...z, connectivityState: payload.data.connectivity_state } : z));
-        } else if (payload.event_type === "PRIORITY_QUEUE_UPDATED") {
-          if (payload.data?.queue) setPriorityQueue(payload.data.queue);
-        } else {
-          // Merge partial updates
-          if (payload.data?.zone) {
-            setZones(prev => prev.map(z => z.id === payload.data.zone.id ? payload.data.zone : z));
-          } else if (payload.data?.zones) {
-            const updatedIds = payload.data.zones.map((z: any) => z.id);
-            setZones(prev => prev.map(z => updatedIds.includes(z.id) ? payload.data.zones.find((uz: any) => uz.id === z.id) : z));
-          }
-          if (payload.data?.incident) {
-            setIncidents(prev => {
-              const exists = prev.some(i => i.id === payload.data.incident.id);
-              if (exists) return prev.map(i => i.id === payload.data.incident.id ? payload.data.incident : i);
-              return [...prev, payload.data.incident];
-            });
-          }
-        }
-      } catch (err) {
-        console.error("WS Parse Error", err);
-      }
-    };
-
-    ws.onclose = () => {
-      setWsStatus("OFFLINE");
-      wsRef.current = null;
-      
-      // Exponential backoff reconnect
-      const backoff = Math.min(1000 * Math.pow(1.5, reconnectAttempts.current), 30000);
-      reconnectAttempts.current += 1;
-      
-      if (reconnectTimer.current) window.clearTimeout(reconnectTimer.current);
-      reconnectTimer.current = window.setTimeout(connectWs, backoff);
-    };
-
-    ws.onerror = () => {
-      // Handled by onclose
-    };
-  }, []);
-
-  const fetchSnapshot = useCallback(async () => {
+  const refreshSnapshot = useCallback(async (silent = false) => {
+    if (!userRef.current) return;
+    if (!silent) setDataLoading(true);
     try {
-      const res = await fetch("/api/v1/dashboard/snapshot");
-      if (res.ok) {
-        const data = await res.json();
-        setZones(data.zones || []);
-        setIncidents(data.incidents || []);
-        setPriorityQueue(data.priority_queue || []);
-        setSystemHealth(data.system_health || null);
-      }
-    } catch (e) {
-      console.error("Snapshot fetch error", e);
-    }
-  }, []);
-
-  useEffect(() => {
-    // Only connect if we have a user (authenticated)
-    if (user) {
-      fetchSnapshot();
-      connectWs();
-    } else {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      setWsStatus("OFFLINE");
-    }
-    
-    // Add polling fallback for snapshot
-    let interval: number;
-    if (user) {
-      interval = window.setInterval(() => {
-        if (wsStatus === "OFFLINE" || wsStatus === "RECONNECTING") {
-          fetchSnapshot();
-        }
-      }, 5000);
-    }
-
-    return () => {
-      if (wsRef.current) wsRef.current.close();
-      if (reconnectTimer.current) window.clearTimeout(reconnectTimer.current);
-      if (interval) window.clearInterval(interval);
-    };
-  }, [user, connectWs, fetchSnapshot, wsStatus]);
-
-  const apiHeaders = useCallback(() => ({
-    "Content-Type": "application/json",
-    ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {})
-  }), [csrfToken]);
-
-  const login = async (email: string, pass: string) => {
-    try {
-      const res = await fetch("/api/v1/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password: pass })
+      const response = await fetch("/api/v1/dashboard/snapshot", {
+        cache: "no-store",
+        credentials: "same-origin",
       });
-      if (res.ok) {
-        const data = await res.json();
+      const snapshot = await responseJson<{
+        snapshot_at: string;
+        zones: DashboardZone[];
+        incidents: IncidentRecord[];
+        priority_queue: PriorityItem[];
+        system_health: SystemHealth;
+      }>(response);
+      applySnapshot(snapshot);
+    } catch (error) {
+      if ((error as { status?: number }).status === 401) clearLocalAuth();
+      else if (!silent) addNotification("error", error instanceof Error ? error.message : "Snapshot unavailable.");
+      throw error;
+    } finally {
+      if (!silent) setDataLoading(false);
+    }
+  }, [addNotification, applySnapshot, clearLocalAuth]);
+
+  const queryIncidents = useCallback(async (query: IncidentQuery = {}) => {
+    if (!userRef.current) return [];
+    const params = new URLSearchParams();
+    params.set("status", query.status ?? "all");
+    if (query.zoneId) params.set("zoneId", query.zoneId);
+    if (query.zoneCode) params.set("zoneCode", query.zoneCode);
+    if (query.hazard && query.hazard !== "NONE") params.set("hazard", query.hazard);
+    if (query.from) params.set("from", query.from);
+    if (query.to) params.set("to", query.to);
+    const response = await fetch(`/api/v1/incidents?${params.toString()}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    const data = await responseJson<{ incidents: IncidentRecord[] }>(response);
+    setIncidents(data.incidents);
+    return data.incidents;
+  }, []);
+
+  const fetchIncidentTimeline = useCallback(async (incidentId: string) => {
+    try {
+      const response = await fetch(`/api/v1/incidents/${encodeURIComponent(incidentId)}/timeline`, {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+      return await responseJson<{ incident: IncidentRecord; events: IncidentTimelineEvent[] }>(response);
+    } catch (error) {
+      addNotification("error", error instanceof Error ? error.message : "Timeline unavailable.");
+      return null;
+    }
+  }, [addNotification]);
+
+  const fetchZoneDetails = useCallback(async (zoneCode: string) => {
+    try {
+      const response = await fetch(`/api/v1/zones/${encodeURIComponent(zoneCode)}`, {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+      return await responseJson<ZoneDetailsPayload>(response);
+    } catch (error) {
+      addNotification("error", error instanceof Error ? error.message : "Zone details unavailable.");
+      return null;
+    }
+  }, [addNotification]);
+
+  const fetchAdminHealth = useCallback(async () => {
+    try {
+      const response = await fetch("/api/v1/admin/system-health", {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+      return await responseJson<Record<string, unknown>>(response);
+    } catch (error) {
+      addNotification("error", error instanceof Error ? error.message : "System health unavailable.");
+      return null;
+    }
+  }, [addNotification]);
+
+  const scheduleAuthoritativeRefresh = useCallback(() => {
+    if (refreshDebounceRef.current) window.clearTimeout(refreshDebounceRef.current);
+    refreshDebounceRef.current = window.setTimeout(() => {
+      void Promise.allSettled([refreshSnapshot(true), queryIncidents({ status: "all" })]);
+    }, 150);
+  }, [queryIncidents, refreshSnapshot]);
+
+  const connectWebSocket = useCallback(() => {
+    if (typeof window === "undefined" || !userRef.current) return;
+    if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) return;
+
+    intentionalCloseRef.current = false;
+    setWsStatus(reconnectAttemptsRef.current > 0 ? "RECONNECTING" : "CONNECTING");
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    wsRef.current = socket;
+
+    socket.onopen = () => {
+      reconnectAttemptsRef.current = 0;
+      setWsStatus("CONNECTED");
+    };
+
+    socket.onmessage = event => {
+      try {
+        const envelope = JSON.parse(event.data) as {
+          event_type?: string;
+          data?: Record<string, unknown>;
+        };
+        const eventType = envelope.event_type ?? "UNKNOWN";
+        const data = envelope.data ?? {};
+
+        if (eventType === "SNAPSHOT") {
+          // Current server sends the complete snapshot in data; older deployments may
+          // send the four fields directly. Both shapes are accepted during rollout.
+          applySnapshot(data as Parameters<typeof applySnapshot>[0]);
+          return;
+        }
+
+        if (data.zone) {
+          const incoming = data.zone as DashboardZone;
+          setZones(previous => {
+            const exists = previous.some(zone => zone.id === incoming.id);
+            return exists
+              ? previous.map(zone => zone.id === incoming.id ? { ...zone, ...incoming } : zone)
+              : [...previous, incoming];
+          });
+        }
+        if (data.incident) {
+          const incoming = data.incident as IncidentRecord;
+          setActiveIncidents(previous => {
+            if (!incoming.active || incoming.status === "RESOLVED") {
+              return previous.filter(incident => incident.id !== incoming.id);
+            }
+            const exists = previous.some(incident => incident.id === incoming.id);
+            return exists
+              ? previous.map(incident => incident.id === incoming.id ? incoming : incident)
+              : [incoming, ...previous];
+          });
+          setIncidents(previous => {
+            const exists = previous.some(incident => incident.id === incoming.id);
+            return exists
+              ? previous.map(incident => incident.id === incoming.id ? incoming : incident)
+              : [incoming, ...previous];
+          });
+          if (eventType === "INCIDENT_CREATED" && incoming.status === "OPEN") {
+            const zone = data.zone as DashboardZone | undefined;
+            notifyOpenIncidents([incoming], zone ? [zone] : zonesRef.current);
+          }
+        }
+
+        if ([
+          "PRIORITY_QUEUE_UPDATED",
+          "INCIDENT_CREATED",
+          "INCIDENT_ACKNOWLEDGED",
+          "INCIDENT_RESOLVED",
+          "ZONE_CONNECTIVITY_CHANGED",
+          "ZONE_STATE_CHANGED",
+        ].includes(eventType)) {
+          scheduleAuthoritativeRefresh();
+        }
+      } catch (error) {
+        console.error("WebSocket message parse failed", error);
+      }
+    };
+
+    socket.onclose = () => {
+      wsRef.current = null;
+      if (intentionalCloseRef.current || !userRef.current) {
+        setWsStatus("OFFLINE");
+        return;
+      }
+      reconnectAttemptsRef.current += 1;
+      setWsStatus(reconnectAttemptsRef.current >= 5 ? "OFFLINE" : "RECONNECTING");
+      const delay = Math.min(1000 * 1.7 ** reconnectAttemptsRef.current, 30_000);
+      if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = window.setTimeout(() => connectWebSocketRef.current(), delay);
+    };
+
+    socket.onerror = () => {
+      // onclose owns reconnect and fallback polling.
+    };
+  }, [applySnapshot, notifyOpenIncidents, scheduleAuthoritativeRefresh]);
+
+  useEffect(() => {
+    connectWebSocketRef.current = connectWebSocket;
+  }, [connectWebSocket]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch("/api/v1/auth/me", {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        if (!response.ok) return;
+        const data = await responseJson<{
+          user: NonNullable<RobofusionState["user"]>;
+          csrfToken: string;
+        }>(response);
+        if (cancelled) return;
         setUser(data.user);
         setCsrfToken(data.csrfToken);
         sessionStorage.setItem("scs-user", JSON.stringify(data.user));
         sessionStorage.setItem("scs-csrf", data.csrfToken);
-        addNotification("success", "Authentication successful.");
-        return true;
-      } else {
-        const err = await res.json().catch(() => null);
-        addNotification("error", err?.message || "Invalid credentials.");
+      } catch {
+        // An unauthenticated first load is expected on the login page.
+      } finally {
+        if (!cancelled) setAuthChecked(true);
       }
-    } catch (e) {
-      console.error("Login failed", e);
-      addNotification("error", "Network error. Unable to connect to server.");
-    }
-    return false;
-  };
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
-  const logout = async () => {
+  useEffect(() => {
+    if (!user) {
+      intentionalCloseRef.current = true;
+      wsRef.current?.close();
+      wsRef.current = null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setWsStatus("OFFLINE");
+      return;
+    }
+
+    void Promise.allSettled([refreshSnapshot(), queryIncidents({ status: "all" })]);
+    connectWebSocket();
+
+    return () => {
+      intentionalCloseRef.current = true;
+      if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
+      wsRef.current?.close();
+      wsRef.current = null;
+    };
+  }, [connectWebSocket, queryIncidents, refreshSnapshot, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const intervalMs = wsStatus === "CONNECTED" ? 15_000 : 2_000;
+    const timer = window.setInterval(() => {
+      void refreshSnapshot(true).catch(() => undefined);
+    }, intervalMs);
+    return () => window.clearInterval(timer);
+  }, [refreshSnapshot, user, wsStatus]);
+
+  const login = useCallback(async (email: string, password: string) => {
     try {
-      const res = await fetch("/api/v1/auth/logout", { method: "POST", headers: apiHeaders() });
-      if (res.ok) addNotification("info", "Logged out securely.");
-    } catch {
-      // Ignore network errors on logout
+      const response = await fetch("/api/v1/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await responseJson<{
+        user: NonNullable<RobofusionState["user"]>;
+        csrfToken: string;
+      }>(response);
+      setUser(data.user);
+      setCsrfToken(data.csrfToken);
+      sessionStorage.setItem("scs-user", JSON.stringify(data.user));
+      sessionStorage.setItem("scs-csrf", data.csrfToken);
+      addNotification("success", `Signed in as ${data.user.name}.`);
+      return true;
+    } catch (error) {
+      addNotification("error", error instanceof Error ? error.message : "Authentication failed.");
+      return false;
+    }
+  }, [addNotification]);
+
+  const logout = useCallback(async () => {
+    try {
+      await fetch("/api/v1/auth/logout", {
+        method: "POST",
+        headers: csrfRef.current ? { "X-CSRF-Token": csrfRef.current } : {},
+        credentials: "same-origin",
+      });
     } finally {
-      setUser(null);
-      setCsrfToken(null);
-      sessionStorage.removeItem("scs-user");
-      sessionStorage.removeItem("scs-csrf");
-      sessionStorage.removeItem("scs-auth");
+      intentionalCloseRef.current = true;
+      wsRef.current?.close();
+      clearLocalAuth();
+      addNotification("info", "Session closed.");
     }
-  };
+  }, [addNotification, clearLocalAuth]);
 
-  const acknowledgeIncident = async (incidentId: string) => {
+  const acknowledgeIncident = useCallback(async (incidentId: string) => {
     try {
-      const res = await fetch(`/api/v1/incidents/${incidentId}/acknowledge`, {
+      const response = await fetch(`/api/v1/incidents/${encodeURIComponent(incidentId)}/acknowledge`, {
         method: "POST",
-        headers: apiHeaders()
+        headers: csrfRef.current ? { "X-CSRF-Token": csrfRef.current } : {},
+        credentials: "same-origin",
       });
-      if (res.ok) {
-        addNotification("success", "Incident acknowledged successfully.");
-        return true;
-      }
-      addNotification("error", "Failed to acknowledge incident.");
-      return false;
-    } catch {
-      addNotification("error", "Network error while acknowledging incident.");
+      await responseJson(response);
+      addNotification("success", "Incident acknowledged. Active attention cue cleared.");
+      await Promise.allSettled([refreshSnapshot(true), queryIncidents({ status: "all" })]);
+      return true;
+    } catch (error) {
+      addNotification("error", error instanceof Error ? error.message : "Acknowledgement failed.");
       return false;
     }
-  };
+  }, [addNotification, queryIncidents, refreshSnapshot]);
 
-  const reportNote = async (text: string) => {
+  const reportNote = useCallback(async (text: string) => {
     try {
-      const res = await fetch("/api/v1/reports/note", {
+      const response = await fetch("/api/v1/reports/note", {
         method: "POST",
-        headers: apiHeaders(),
-        body: JSON.stringify({ text })
+        headers: {
+          "Content-Type": "application/json",
+          ...(csrfRef.current ? { "X-CSRF-Token": csrfRef.current } : {}),
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({ text }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        addNotification("success", "Note validated and associated with incident.");
-        return { validated: true, message: data.advisory || `Parsed: ${data.signal?.hazard} in ${data.signal?.zoneCode}` };
-      } else {
-        addNotification("error", data.message || "Failed to parse report.");
-        return { validated: false, message: data.message || "Failed to parse report." };
-      }
-    } catch {
-      addNotification("error", "Network error while reporting note.");
-      return { validated: false, message: "Network error." };
+      const data = await responseJson<Record<string, unknown>>(response);
+      addNotification("success", "Report parsed and passed the deterministic validation gate.");
+      await refreshSnapshot(true);
+      return {
+        validated: true,
+        message: String(data.advisory ?? "Validated advisory evidence stored."),
+        data,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Report validation failed.";
+      addNotification("error", message);
+      return { validated: false, message };
     }
-  };
+  }, [addNotification, refreshSnapshot]);
 
-  const toggleOverride = async (zoneCode: string, action: string) => {
+  const applyOverride = useCallback(async (
+    zoneCode: string,
+    action: "SILENCE" | "RESET" | "TEST_ACTUATOR",
+  ) => {
     try {
-      const isClear = action === "CLEAR";
-      const url = isClear ? `/api/v1/admin/override?zone=${zoneCode}` : `/api/v1/admin/override`;
-      const res = await fetch(url, {
-        method: isClear ? "DELETE" : "POST",
-        headers: apiHeaders(),
-        ...(isClear ? {} : { body: JSON.stringify({ zoneCode, action, reason: "Manual override triggered from UI" }) })
+      const response = await fetch("/api/v1/admin/override", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(csrfRef.current ? { "X-CSRF-Token": csrfRef.current } : {}),
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          zoneCode,
+          action,
+          reason: `Admin ${action.toLowerCase()} action from command dashboard`,
+          expiresInMinutes: 30,
+        }),
       });
-      if (res.ok) {
-        addNotification("success", `Override action '${action}' applied to ${zoneCode}.`);
-        return true;
-      }
-      addNotification("error", "Failed to apply manual override.");
-      return false;
-    } catch {
-      addNotification("error", "Network error while applying override.");
+      await responseJson(response);
+      addNotification("success", `${action} override applied to ${zoneCode}.`);
+      await refreshSnapshot(true);
+      return true;
+    } catch (error) {
+      addNotification("error", error instanceof Error ? error.message : "Override failed.");
       return false;
     }
-  };
+  }, [addNotification, refreshSnapshot]);
 
-  if (!hydrated) return null;
+  const clearOverride = useCallback(async (zoneCode: string) => {
+    try {
+      const response = await fetch(`/api/v1/admin/override?zone=${encodeURIComponent(zoneCode)}`, {
+        method: "DELETE",
+        headers: csrfRef.current ? { "X-CSRF-Token": csrfRef.current } : {},
+        credentials: "same-origin",
+      });
+      await responseJson(response);
+      addNotification("success", `Active override cleared for ${zoneCode}.`);
+      await refreshSnapshot(true);
+      return true;
+    } catch (error) {
+      addNotification("error", error instanceof Error ? error.message : "Unable to clear override.");
+      return false;
+    }
+  }, [addNotification, refreshSnapshot]);
 
   return (
-    <Context.Provider value={{ zones, incidents, user, csrfToken, wsStatus, notifications, priorityQueue, systemHealth, login, logout, acknowledgeIncident, reportNote, toggleOverride, addNotification, removeNotification }}>
+    <Context.Provider value={{
+      zones,
+      activeIncidents,
+      incidents,
+      priorityQueue,
+      systemHealth,
+      user,
+      csrfToken,
+      authChecked,
+      dataLoading,
+      wsStatus,
+      lastSyncAt,
+      notifications,
+      login,
+      logout,
+      refreshSnapshot,
+      queryIncidents,
+      fetchIncidentTimeline,
+      fetchZoneDetails,
+      fetchAdminHealth,
+      acknowledgeIncident,
+      reportNote,
+      applyOverride,
+      clearOverride,
+      addNotification,
+      removeNotification,
+    }}>
       {children}
     </Context.Provider>
   );

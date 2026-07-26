@@ -9,7 +9,8 @@ export const runtime = "nodejs";
  * Returns live state of all configured zones with risk details.
  * Includes zone_states data for detailed hysteresis info.
  */
-export async function GET(_request: NextRequest) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function GET(_: NextRequest) {
   try {
     await requireUser();
     const c = await collections();

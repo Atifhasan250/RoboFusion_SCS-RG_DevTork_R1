@@ -8,10 +8,12 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ incide
     await assertCsrf(request);
     const { incidentId } = await ctx.params;
     return NextResponse.json({ incident: await acknowledge(incidentId, user.id) });
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const err = e as { code?: string; message?: string; status?: number; httpStatus?: number };
     return NextResponse.json(
-      { error: e instanceof AuthError ? e.code : e.code || "ACKNOWLEDGMENT_FAILED", message: e.message },
-      { status: e instanceof AuthError ? e.status : (e.httpStatus || 409) }
+      { error: e instanceof AuthError ? e.code : err.code || "ACKNOWLEDGMENT_FAILED", message: err.message },
+      { status: e instanceof AuthError ? e.status : (err.httpStatus || 409) }
     );
   }
 }
+
