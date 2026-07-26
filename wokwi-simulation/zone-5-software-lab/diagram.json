@@ -32,7 +32,7 @@
       "top": 50,
       "left": -250,
       "attrs": {
-        "label": "Camera"
+        "label": "Occupancy Cross-check (sim)"
       }
     },
     {

@@ -1,33 +1,97 @@
-# Wokwi Hardware Simulation (Track B)
+# Five-Zone Wokwi Hardware Simulation
 
-This directory contains the ESP32 simulation files for a Zone Node, implementing the requirements for Section A: Hardware & Sensing.
+This folder contains one independent ESP32 zone node for each official lab:
 
-## Running the Simulation
+| Folder | Zone code |
+|---|---|
+| `zone-1-iot-lab` | `IOT_LAB` |
+| `zone-2-robotics-lab` | `ROBOTICS_LAB` |
+| `zone-3-server-room` | `SERVER_ROOM` |
+| `zone-4-data-science-lab` | `DATA_SCIENCE_LAB` |
+| `zone-5-software-lab` | `SOFTWARE_LAB` |
 
-The simulation is configured to connect to the backend deployed on Render.
+## Components per zone
 
-### Step 1: Wokwi Setup
-We have pre-configured 3 active zones for your simulation (`zone-1-iot-lab`, `zone-2-robotics-lab`, `zone-3-server-room`). For each zone:
-1. Go to [wokwi.com](https://wokwi.com) and create a **New ESP32 Project**.
-2. Open the corresponding zone folder in this directory (e.g., `zone-1-iot-lab`).
-3. Copy the contents of **`sketch.ino`** into the Wokwi sketch editor.
-4. Copy the contents of **`diagram.json`** into the Wokwi diagram editor to generate the circuit.
-5. Open the `Library Manager` in Wokwi (or create `libraries.txt`) and add: `ArduinoJson`.
-*(Repeat this process in 3 separate browser tabs for the 3 zones).*
+- Flame switch
+- Gas potentiometer
+- Water-level potentiometer
+- PIR motion sensor
+- Occupancy cross-check development switch
+- Sensor-fault switch
+- Green, yellow and red LEDs
+- Buzzer
+- Relay module
 
-### Step 2: Configuration
-The `sketch.ino` in each folder already has the correct `ZONE_CODE` and `ZONE_API_KEY` configured for you! The backend endpoint is also predefined:
-```cpp
-const char* BACKEND_URL = "https://robofusion-scs-rg-devtork-r1.onrender.com"; 
+The occupancy cross-check switch is not an ESP32-CAM implementation and is not claimed as the camera bonus.
+
+## Pin mapping
+
+| Component | GPIO |
+|---|---:|
+| Flame | 13 |
+| Gas | 34 |
+| Water | 35 |
+| PIR | 12 |
+| Occupancy cross-check switch | 21 |
+| Sensor fault | 15 |
+| Green LED | 25 |
+| Yellow LED | 26 |
+| Red LED | 27 |
+| Buzzer | 14 |
+| Relay | 32 |
+
+## Running each zone
+
+1. Create/open an ESP32 project in Wokwi.
+2. Copy the zone folder's `sketch.ino` and `diagram.json`.
+3. Add the `ArduinoJson` library listed in `libraries.txt`.
+4. Change `BACKEND_URL` only when the deployment address differs.
+5. Run all five projects in separate tabs.
+
+The sketches connect to `Wokwi-GUEST` and use HTTPS. `client.setInsecure()` is limited to Wokwi/demo transport; production physical hardware should verify or pin the server certificate.
+
+## Timing and behaviour
+
+- Sensor sampling: 200 ms
+- Command polling: 250 ms
+- Wi-Fi reconnect attempt: every 5 seconds
+- PIR entry debounce: about 1 second
+- PIR exit debounce: about 2 seconds
+- Fire confirmation: backend requires five samples, about 1 second
+- Gas warm-up: first 30 seconds ignored by backend
+- Offline cache: 180 readings, about 36 seconds at the configured sample interval
+
+## Fault behaviour
+
+Turning on `Sensor Fault` sends:
+
+```json
+{
+  "sensorHealth": "OFFLINE",
+  "sensorStatus": {
+    "fire": "OFFLINE",
+    "gas": "OFFLINE",
+    "water": "OFFLINE",
+    "pir": "OFFLINE"
+  }
+}
 ```
 
-### Step 3: Execution
-Click the Play button in all 3 Wokwi tabs. 
-- The 3 ESP32 nodes will connect to the `Wokwi-GUEST` WiFi.
-- Sensor data from all 3 zones will be sampled and transmitted concurrently via POST request every 500ms.
-- Actuator commands are polled via GET request every 1000ms.
+The backend preserves the last known state/risk/occupancy. It does not interpret disconnected sensors as empty or Safe.
 
-## Sensor Operations
-- **Fire/Flame:** Toggled via the Flame Sensor slide switch. Triggers debouncing logic on the backend.
-- **Gas:** Adjusted via the Gas potentiometer. The backend enforces a 30-second warm-up period.
-- **Camera Occupancy:** Toggled via the Camera Occ switch to provide cross-checking logic against the PIR sensor.
+## Actuator rules
+
+| State | LED | Buzzer | Relay |
+|---|---|---|---|
+| SAFE | Green | Off | Off |
+| WARNING | Yellow | Off | Off |
+| CRITICAL | Red | On | Cutoff on |
+| OFFLINE after prior SAFE | Off | Off | Off |
+| OFFLINE after prior WARNING | Yellow | Off | Off |
+| OFFLINE after prior CRITICAL | Red | On | Cutoff remains on |
+
+Commands carry an increasing `command_version`. Each ESP32 applies a version only once and acknowledges the command back to the server.
+
+## Development keys
+
+The sketches currently use the seed-compatible demo keys. Replace them before any public/non-demo deployment.

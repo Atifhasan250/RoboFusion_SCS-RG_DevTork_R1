@@ -1,159 +1,161 @@
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <time.h>
 
-// --- Configuration ---
-// IMPORTANT: Replace this with your ngrok URL or real backend URL (no trailing slash)
-const char* BACKEND_URL = "https://robofusion-scs-rg-devtork-r1.onrender.com"; 
+// Replace only when the deployed backend URL changes. No trailing slash.
+const char* BACKEND_URL = "https://robofusion-scs-rg-devtork-r1.onrender.com";
 const char* ZONE_CODE = "SERVER_ROOM";
 const char* ZONE_API_KEY = "SERVER_ROOM-demo-key";
-
-// WiFi settings for Wokwi
 const char* ssid = "Wokwi-GUEST";
 const char* password = "";
 
-// --- Pin Definitions ---
-const int PIN_FIRE = 13;      // Slide Switch (Pullup)
-const int PIN_GAS = 34;       // Potentiometer
-const int PIN_WATER = 35;     // Potentiometer
-const int PIN_MOTION = 12;    // PIR Sensor
-const int PIN_CAMERA = 21;
-const int PIN_FAULT = 15;     // Slide Switch (Sensor Disconnect Fault)    // Slide Switch (Bonus 1 Camera)
+const int PIN_FIRE = 13;
+const int PIN_GAS = 34;
+const int PIN_WATER = 35;
+const int PIN_MOTION = 12;
+const int PIN_CAMERA = 21; // Development occupancy cross-check switch; not an ESP32-CAM claim.
+const int PIN_FAULT = 15;
+const int PIN_LED_SAFE = 25;
+const int PIN_LED_WARN = 26;
+const int PIN_LED_CRIT = 27;
+const int PIN_BUZZER = 14;
+const int PIN_RELAY = 32;
 
-const int PIN_LED_SAFE = 25;  // Green LED
-const int PIN_LED_WARN = 26;  // Yellow LED
-const int PIN_LED_CRIT = 27;  // Red LED
-const int PIN_BUZZER = 14;    // Buzzer
-const int PIN_RELAY = 32;     // Relay (Power Cutoff)
-
-// --- State & Timers ---
-String bootId = "";
+String bootId;
 unsigned long sequence = 1;
 unsigned long lastReadingTime = 0;
 unsigned long lastCommandTime = 0;
-const int READING_INTERVAL = 500;  // Send readings every 500ms
-const int COMMAND_INTERVAL = 1000; // Poll commands every 1000ms
+unsigned long lastReconnectAttempt = 0;
+const unsigned long READING_INTERVAL = 200;
+const unsigned long COMMAND_INTERVAL = 250;
+const unsigned long RECONNECT_INTERVAL = 5000;
+long lastAppliedCommandVersion = -1;
 
-// --- Offline Queue ---
-const int MAX_QUEUE = 120;
-
-bool pirState = false;
-unsigned long pirHighStart = 0;
-unsigned long pirLowStart = 0;
+const int MAX_QUEUE = 180; // ~36 seconds at 200 ms sampling.
 String offlineQueue[MAX_QUEUE];
 int queueHead = 0;
 int queueTail = 0;
 int queueCount = 0;
+bool pirState = false;
+unsigned long pirHighStart = 0;
+unsigned long pirLowStart = 0;
 
-void enqueueReading(String payload) {
-  if (queueCount < MAX_QUEUE) {
-    offlineQueue[queueTail] = payload;
-    queueTail = (queueTail + 1) % MAX_QUEUE;
-    queueCount++;
+void enqueueReading(const String& payload) {
+  if (queueCount == MAX_QUEUE) {
+    // Drop the oldest sample rather than blocking current sensing forever.
+    queueHead = (queueHead + 1) % MAX_QUEUE;
+    queueCount--;
   }
+  offlineQueue[queueTail] = payload;
+  queueTail = (queueTail + 1) % MAX_QUEUE;
+  queueCount++;
 }
 
-void setup() {
-  Serial.begin(115200);
-  randomSeed(analogRead(0));
-  bootId = "boot-";
-  for(int i=0; i<6; i++) {
-    bootId += String(random(0, 16), HEX);
-  }
+void beginSecure(HTTPClient& http, WiFiClientSecure& client, const String& url) {
+  client.setInsecure(); // Wokwi/demo transport. Production hardware should pin/verify the server CA.
+  http.begin(client, url);
+  http.setConnectTimeout(5000);
+  http.setTimeout(5000);
+}
 
-  // Initialize Input Pins
-  pinMode(PIN_FIRE, INPUT_PULLUP); // Switch connects to GND, so default is HIGH
-  pinMode(PIN_GAS, INPUT);
-  pinMode(PIN_WATER, INPUT);
-  pinMode(PIN_MOTION, INPUT);
-  pinMode(PIN_CAMERA, INPUT_PULLUP);
-  pinMode(PIN_FAULT, INPUT_PULLUP);
+void ensureWiFiConnected() {
+  if (WiFi.status() == WL_CONNECTED) return;
+  if (millis() - lastReconnectAttempt < RECONNECT_INTERVAL) return;
+  lastReconnectAttempt = millis();
+  WiFi.disconnect();
+  WiFi.begin(ssid, password);
+}
 
-  // Initialize Output Pins
-  pinMode(PIN_LED_SAFE, OUTPUT);
-  pinMode(PIN_LED_WARN, OUTPUT);
-  pinMode(PIN_LED_CRIT, OUTPUT);
-  pinMode(PIN_BUZZER, OUTPUT);
-  pinMode(PIN_RELAY, OUTPUT);
-
-  // Ensure actuators are off at boot
+void applyActuators(bool buzzer, const char* leds, bool relay) {
   digitalWrite(PIN_LED_SAFE, LOW);
   digitalWrite(PIN_LED_WARN, LOW);
   digitalWrite(PIN_LED_CRIT, LOW);
-  digitalWrite(PIN_BUZZER, LOW);
-  digitalWrite(PIN_RELAY, LOW);
-
-  // Connect to WiFi
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+  if (leds != nullptr) {
+    String color = String(leds);
+    color.toUpperCase();
+    if (color == "GREEN") digitalWrite(PIN_LED_SAFE, HIGH);
+    else if (color == "YELLOW") digitalWrite(PIN_LED_WARN, HIGH);
+    else if (color == "RED") digitalWrite(PIN_LED_CRIT, HIGH);
   }
-  Serial.println("\nWiFi connected!");
-  configTime(0, 0, "pool.ntp.org");
+  digitalWrite(PIN_BUZZER, buzzer ? HIGH : LOW);
+  digitalWrite(PIN_RELAY, relay ? HIGH : LOW);
 }
 
-void loop() {
-  unsigned long currentMillis = millis();
-
-  // 1. Send Sensor Readings (Every 500ms)
-  if (currentMillis - lastReadingTime >= READING_INTERVAL) {
-    lastReadingTime = currentMillis;
-    sendReadings();
-  }
-
-  // 2. Poll for Actuator Commands (Every 1000ms)
-  if (currentMillis - lastCommandTime >= COMMAND_INTERVAL) {
-    lastCommandTime = currentMillis;
-    fetchCommands();
-  }
-}
-
-bool sendPostRequest(String requestBody, bool isQueued) {
+void acknowledgeCommand(const String& commandId) {
+  if (WiFi.status() != WL_CONNECTED || commandId.length() == 0) return;
   HTTPClient http;
-  String url = String(BACKEND_URL) + "/api/v1/readings/" + ZONE_CODE;
-  http.begin(url);
+  WiFiClientSecure client;
+  beginSecure(http, client, String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("x-zone-api-key", ZONE_API_KEY);
+  StaticJsonDocument<128> body;
+  body["command_id"] = commandId;
+  String payload;
+  serializeJson(body, payload);
+  http.POST(payload);
+  http.end();
+}
 
-  bool success = false;
-  int httpResponseCode = http.POST(requestBody);
-  if (httpResponseCode > 0) {
-    if (httpResponseCode == 200 || httpResponseCode == 201) {
-      success = true;
-      String responseStr = http.getString();
-      StaticJsonDocument<256> respDoc;
-      if (!isQueued && !responseStr.isEmpty()) {
-        DeserializationError err = deserializeJson(respDoc, responseStr);
-        if (!err && respDoc.containsKey("command")) {
-          applyActuators(
-            respDoc["command"]["buzzer"],
-            respDoc["command"]["led"],
-            respDoc["command"]["relay_cutoff"]
-          );
-        }
-      }
+void processCommand(JsonVariantConst command) {
+  if (command.isNull()) return;
+  long version = command["command_version"] | -1;
+  if (version < 0) version = command["state_version"] | -1;
+  if (version <= lastAppliedCommandVersion) return;
+  const char* led = command["led"] | "OFF";
+  bool buzzer = command["buzzer"] | false;
+  bool relay = command["relay_cutoff"] | false;
+  applyActuators(buzzer, led, relay);
+  lastAppliedCommandVersion = version;
+  if (!command["command_id"].isNull()) acknowledgeCommand(command["command_id"].as<String>());
+}
+
+bool sendPostRequest(const String& requestBody, bool isQueued) {
+  if (WiFi.status() != WL_CONNECTED) return false;
+  HTTPClient http;
+  WiFiClientSecure client;
+  beginSecure(http, client, String(BACKEND_URL) + "/api/v1/readings/" + ZONE_CODE);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-zone-api-key", ZONE_API_KEY);
+  int code = http.POST(requestBody);
+  bool success = code == 200 || code == 201;
+  if (success && !isQueued) {
+    StaticJsonDocument<768> response;
+    if (deserializeJson(response, http.getString()) == DeserializationError::Ok
+        && response.containsKey("command")
+        && !response["command"].isNull()) {
+      processCommand(response["command"].as<JsonVariantConst>());
     }
-    if (httpResponseCode != 200 && httpResponseCode != 201) {
-      Serial.print("API Error ");
-      Serial.print(httpResponseCode);
-      Serial.print(": ");
-      Serial.println(http.getString());
-    }
-  } else {
-    Serial.print("Error sending readings: ");
-    Serial.println(http.errorToString(httpResponseCode));
+  } else if (!success && code > 0) {
+    Serial.printf("Reading API error %d: %s\n", code, http.getString().c_str());
   }
   http.end();
   return success;
 }
 
+String replayPayload(const String& original, bool lastInBatch) {
+  StaticJsonDocument<768> doc;
+  if (deserializeJson(doc, original) != DeserializationError::Ok) return original;
+  doc["replayed"] = true;
+  doc["replayBatchLast"] = lastInBatch;
+  String output;
+  serializeJson(doc, output);
+  return output;
+}
+
+String getTimestamp() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo, 100)) return "";
+  char value[32];
+  strftime(value, sizeof(value), "%Y-%m-%dT%H:%M:%SZ", &timeinfo);
+  return String(value);
+}
+
 void sendReadings() {
-  int fireVal = (digitalRead(PIN_FIRE) == LOW) ? 1 : 0; 
-  int gasVal = analogRead(PIN_GAS);
-  int waterVal = map(analogRead(PIN_WATER), 0, 4095, 0, 100);
+  String timestamp = getTimestamp();
+  if (timestamp.length() == 0) return;
+
   int rawMotion = digitalRead(PIN_MOTION);
   if (rawMotion == HIGH) {
     if (pirHighStart == 0) pirHighStart = millis();
@@ -164,121 +166,97 @@ void sendReadings() {
     if (millis() - pirLowStart >= 2000) pirState = false;
     pirHighStart = 0;
   }
-  bool cameraOcc = (digitalRead(PIN_CAMERA) == LOW);
 
-  StaticJsonDocument<500> doc;
+  bool fault = digitalRead(PIN_FAULT) == LOW;
+  StaticJsonDocument<768> doc;
   doc["bootId"] = bootId;
   doc["sequence"] = sequence++;
-  String ts = getTimestamp();
-  if (ts == "") return; // Wait for NTP sync
-  doc["timestamp"] = ts;
-  doc["fire"] = (fireVal == 1);
-  doc["gas"] = gasVal;
-  doc["water"] = waterVal;
+  doc["timestamp"] = timestamp;
+  doc["fire"] = digitalRead(PIN_FIRE) == LOW;
+  doc["gas"] = analogRead(PIN_GAS);
+  doc["water"] = map(analogRead(PIN_WATER), 0, 4095, 0, 100);
   doc["pir"] = pirState;
-  doc["cameraOccupancy"] = cameraOcc;
-  bool fault = (digitalRead(PIN_FAULT) == LOW);
-  doc["sensorHealth"] = fault ? "DEGRADED" : "HEALTHY";
-  JsonObject sensorStatus = doc.createNestedObject("sensorStatus");
-  sensorStatus["fire"] = fault ? "OFFLINE" : "ONLINE";
-  sensorStatus["gas"] = fault ? "OFFLINE" : "ONLINE";
-  sensorStatus["water"] = fault ? "OFFLINE" : "ONLINE";
-  sensorStatus["pir"] = fault ? "OFFLINE" : "ONLINE";
-  doc["deviceUptimeSeconds"] = millis() / 1000;
+  doc["cameraOccupancy"] = digitalRead(PIN_CAMERA) == LOW;
+  doc["sensorHealth"] = fault ? "OFFLINE" : "HEALTHY";
+  JsonObject statuses = doc.createNestedObject("sensorStatus");
+  statuses["fire"] = fault ? "OFFLINE" : "ONLINE";
+  statuses["gas"] = fault ? "OFFLINE" : (millis() < 30000 ? "WARMING_UP" : "ONLINE");
+  statuses["water"] = fault ? "OFFLINE" : "ONLINE";
+  statuses["pir"] = fault ? "OFFLINE" : "ONLINE";
+  doc["deviceUptimeSeconds"] = millis() / 1000.0;
   doc["sampleIntervalMs"] = READING_INTERVAL;
+  doc["replayed"] = false;
+  doc["replayBatchLast"] = false;
 
-  String requestBody;
-  serializeJson(doc, requestBody);
-
+  String payload;
+  serializeJson(doc, payload);
   if (WiFi.status() != WL_CONNECTED) {
-    enqueueReading(requestBody);
+    enqueueReading(payload);
     return;
   }
 
-  while(queueCount > 0) {
-    String queuedBody = offlineQueue[queueHead];
-    if (sendPostRequest(queuedBody, true)) {
-      queueHead = (queueHead + 1) % MAX_QUEUE;
-      queueCount--;
-    } else {
-      break;
-    }
+  while (queueCount > 0) {
+    String queued = replayPayload(offlineQueue[queueHead], queueCount == 1);
+    if (!sendPostRequest(queued, true)) break;
+    queueHead = (queueHead + 1) % MAX_QUEUE;
+    queueCount--;
   }
-
-  if (!sendPostRequest(requestBody, false)) {
-    enqueueReading(requestBody);
-  }
+  if (!sendPostRequest(payload, false)) enqueueReading(payload);
 }
 
 void fetchCommands() {
   if (WiFi.status() != WL_CONNECTED) return;
-
   HTTPClient http;
-  String url = String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE;
-  http.begin(url);
+  WiFiClientSecure client;
+  beginSecure(http, client, String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE);
   http.addHeader("x-zone-api-key", ZONE_API_KEY);
-
-  int httpResponseCode = http.GET();
-  if (httpResponseCode == 200) {
-    String response = http.getString();
-    StaticJsonDocument<500> doc;
-    DeserializationError error = deserializeJson(doc, response);
-    
-    if (!error) {
-      applyActuators(doc["buzzer"], doc["led"], doc["relay_cutoff"]);
-      
-      // If we got a command, acknowledge it
-      if (doc["command_id"] && !doc["command_id"].isNull()) {
-        String cmdId = doc["command_id"];
-        acknowledgeCommand(cmdId);
-      }
+  int code = http.GET();
+  if (code == 200) {
+    StaticJsonDocument<512> response;
+    if (deserializeJson(response, http.getString()) == DeserializationError::Ok) {
+      processCommand(response.as<JsonVariantConst>());
     }
   }
   http.end();
 }
 
-void applyActuators(bool buzzer, const char* leds, bool relay) {
-  // Update LEDs
-  digitalWrite(PIN_LED_SAFE, LOW);
-  digitalWrite(PIN_LED_WARN, LOW);
-  digitalWrite(PIN_LED_CRIT, LOW);
+void setup() {
+  Serial.begin(115200);
+  randomSeed(analogRead(0));
+  bootId = "boot-";
+  for (int i = 0; i < 8; i++) bootId += String(random(0, 16), HEX);
 
-  if (leds != nullptr) {
-    String ledColor = String(leds);
-    ledColor.toUpperCase();
+  pinMode(PIN_FIRE, INPUT_PULLUP);
+  pinMode(PIN_GAS, INPUT);
+  pinMode(PIN_WATER, INPUT);
+  pinMode(PIN_MOTION, INPUT);
+  pinMode(PIN_CAMERA, INPUT_PULLUP);
+  pinMode(PIN_FAULT, INPUT_PULLUP);
+  pinMode(PIN_LED_SAFE, OUTPUT);
+  pinMode(PIN_LED_WARN, OUTPUT);
+  pinMode(PIN_LED_CRIT, OUTPUT);
+  pinMode(PIN_BUZZER, OUTPUT);
+  pinMode(PIN_RELAY, OUTPUT);
+  applyActuators(false, "GREEN", false);
 
-    if (ledColor == "GREEN") digitalWrite(PIN_LED_SAFE, HIGH);
-    else if (ledColor == "YELLOW") digitalWrite(PIN_LED_WARN, HIGH);
-    else if (ledColor == "RED") digitalWrite(PIN_LED_CRIT, HIGH);
-  }
-
-  // Update Buzzer & Relay (PDF Section 06, TC5)
-  digitalWrite(PIN_BUZZER, buzzer ? HIGH : LOW);
-  digitalWrite(PIN_RELAY, relay ? HIGH : LOW);
+  WiFi.begin(ssid, password);
+  unsigned long started = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - started < 15000) delay(250);
+  if (WiFi.status() == WL_CONNECTED) Serial.println("WiFi connected");
+  else Serial.println("WiFi unavailable; sampling will start after reconnection and time sync");
+  configTime(0, 0, "pool.ntp.org");
 }
 
-void acknowledgeCommand(String commandId) {
-  HTTPClient http;
-  String url = String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE;
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("x-zone-api-key", ZONE_API_KEY);
-
-  StaticJsonDocument<200> doc;
-  doc["command_id"] = commandId;
-  String requestBody;
-  serializeJson(doc, requestBody);
-
-  http.POST(requestBody);
-  http.end();
-}
-
-String getTimestamp() {
-  struct tm timeinfo;
-  if(!getLocalTime(&timeinfo, 5000)){
-    return ""; 
+void loop() {
+  ensureWiFiConnected();
+  unsigned long now = millis();
+  if (now - lastReadingTime >= READING_INTERVAL) {
+    lastReadingTime = now;
+    sendReadings();
   }
-  char timeStringBuff[50];
-  strftime(timeStringBuff, sizeof(timeStringBuff), "%Y-%m-%dT%H:%M:%SZ", &timeinfo);
-  return String(timeStringBuff);
+  if (now - lastCommandTime >= COMMAND_INTERVAL) {
+    lastCommandTime = now;
+    fetchCommands();
+  }
+  delay(5);
 }
