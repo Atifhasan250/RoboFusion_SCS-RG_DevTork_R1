@@ -1,23 +1,28 @@
 import { realtime } from "@/src/server/realtime/hub";
 import { requireUser, AuthError } from "@/src/server/auth/session";
-import { dashboardSnapshot } from "@/src/server/services/dashboard-service";
+import { collections } from "@/src/server/db/collections";
+import { priorityQueue } from "@/src/server/services/incident-service";
 import { id } from "@/src/server/utils/id";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
     await requireUser();
-    const snapshot = await dashboardSnapshot();
+    const c = await collections();
+    const [zones, incidents, queue] = await Promise.all([
+      c.zones.find({ configured: true }, { projection: { _id: 0, apiKeyHash: 0 } }).sort({ code: 1 }).toArray(),
+      c.incidents.find({ active: true }, { projection: { _id: 0 } }).sort({ startedAt: -1 }).toArray(),
+      priorityQueue(),
+    ]);
     const encoder = new TextEncoder();
     let unsubscribe: (() => void) | undefined;
     let timer: ReturnType<typeof setInterval> | undefined;
     const initial = {
       event_id: id(),
       event_type: "SNAPSHOT",
-      occurred_at: snapshot.snapshot_at,
-      data: snapshot,
+      occurred_at: new Date().toISOString(),
+      data: { zones, incidents, priority_queue: queue },
       version: 0,
     };
 
@@ -28,14 +33,14 @@ export async function GET() {
           try {
             controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
           } catch {
-            // Browser disconnected between callback scheduling and enqueue.
+            // Client has already disconnected.
           }
         });
         timer = setInterval(() => {
           try {
             controller.enqueue(encoder.encode(": keepalive\n\n"));
           } catch {
-            // Browser already disconnected.
+            // Client has already disconnected.
           }
         }, 15_000);
       },
@@ -50,7 +55,6 @@ export async function GET() {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache, no-transform",
         Connection: "keep-alive",
-        "X-Accel-Buffering": "no",
       },
     });
   } catch (error) {

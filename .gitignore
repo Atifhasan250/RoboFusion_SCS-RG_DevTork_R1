@@ -51,4 +51,3 @@ bun.lock
 /backups/
 /docs/evidence/*.log
 /docs/evidence/*.json
-/.agents/

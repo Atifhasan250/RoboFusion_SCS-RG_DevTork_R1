@@ -1,30 +1,54 @@
 import { NextResponse } from "next/server";
 import { requireUser, AuthError } from "@/src/server/auth/session";
 import { collections } from "@/src/server/db/collections";
-import { calculateZonePrediction } from "@/src/server/services/prediction-service";
+import { predictRisk } from "@/src/server/ml/inference";
+import { id as generateId } from "@/src/server/utils/id";
 
-export const dynamic = "force-dynamic";
-
-export async function GET(request: Request, ctx: { params: Promise<{ zoneCode: string }> }) {
+export async function GET(_: Request, ctx: { params: Promise<{ zoneCode: string }> }) {
   try {
     await requireUser();
     const { zoneCode } = await ctx.params;
     const c = await collections();
     const zone = await c.zones.findOne({ code: zoneCode, configured: true });
     if (!zone) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+    
+    const readings = await c.readings.find({ zoneId: zone.id }).sort({ observedAt: -1 }).limit(6).toArray();
+    const current = readings[0];
+    if (!current) return NextResponse.json({ error: "NO_DATA" }, { status: 404 });
+    
+    const slope = readings.length > 1 ? (readings[0].riskScore - readings.at(-1)!.riskScore) / readings.length / 100 : 0;
+    const features = {
+      gas: current.normalized.gas,
+      water: current.normalized.water,
+      fire: current.fire ? 1 : 0,
+      occupancy: current.normalized.occupancy,
+      slope
+    };
+    
+    const predictionResult = await predictRisk(features);
 
-    const persist = new URL(request.url).searchParams.get("persist") === "true";
-    const result = await calculateZonePrediction(zone.id, persist);
-    if (!result) return NextResponse.json({ error: "NO_DATA" }, { status: 404 });
+    const now = new Date();
+    await c.predictions.insertOne({
+      id: generateId(),
+      zoneId: zone.id,
+      source: "TRAINED_MODEL",
+      probability: predictionResult.probability,
+      modelVersion: predictionResult.modelVersion,
+      horizonMinutes: 5,
+      featureSnapshot: features,
+      advisoryOnly: true,
+      predictedAt: now
+    });
 
     return NextResponse.json({
-      prediction: result,
-      safety: "Predicted Risk is advisory only and can never issue a relay, buzzer or LED command.",
-    }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) {
+      prediction: predictionResult,
+      liveRiskScore: current.riskScore,
+      safety: "Prediction is advisory only and cannot issue physical actuator commands."
+    });
+  } catch (e) {
     return NextResponse.json(
-      { error: error instanceof AuthError ? error.code : "ERROR" },
-      { status: error instanceof AuthError ? error.status : 500 },
+      { error: e instanceof AuthError ? e.code : "ERROR" },
+      { status: e instanceof AuthError ? e.status : 500 }
     );
   }
 }

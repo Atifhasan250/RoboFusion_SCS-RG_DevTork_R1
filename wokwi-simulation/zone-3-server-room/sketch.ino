@@ -86,14 +86,9 @@ void applyActuators(bool buzzer, const char* leds, bool relay) {
 
 void acknowledgeCommand(const String& commandId) {
   if (WiFi.status() != WL_CONNECTED || commandId.length() == 0) return;
-  static HTTPClient http;
-  static WiFiClientSecure secureClient;
-  static WiFiClient client;
-  static bool initialized = false;
-  if (!initialized) {
-    beginSecure(http, secureClient, client, String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE);
-    initialized = true;
-  }
+  HTTPClient http;
+  WiFiClientSecure client;
+  beginSecure(http, client, String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("x-zone-api-key", ZONE_API_KEY);
   StaticJsonDocument<128> body;
@@ -106,8 +101,8 @@ void acknowledgeCommand(const String& commandId) {
 
 void processCommand(JsonVariantConst command) {
   if (command.isNull()) return;
-  long version = command["command_version"] | 0;
-  if (version <= 0) version = command["state_version"] | -1;
+  long version = command["command_version"] | -1;
+  if (version < 0) version = command["state_version"] | -1;
   if (version <= lastAppliedCommandVersion) return;
   const char* led = command["led"] | "OFF";
   bool buzzer = command["buzzer"] | false;
@@ -119,14 +114,9 @@ void processCommand(JsonVariantConst command) {
 
 bool sendPostRequest(const String& requestBody, bool isQueued) {
   if (WiFi.status() != WL_CONNECTED) return false;
-  static HTTPClient http;
-  static WiFiClientSecure secureClient;
-  static WiFiClient client;
-  static bool initialized = false;
-  if (!initialized) {
-    beginSecure(http, secureClient, client, String(BACKEND_URL) + "/api/v1/readings/" + ZONE_CODE);
-    initialized = true;
-  }
+  HTTPClient http;
+  WiFiClientSecure client;
+  beginSecure(http, client, String(BACKEND_URL) + "/api/v1/readings/" + ZONE_CODE);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("x-zone-api-key", ZONE_API_KEY);
   int code = http.POST(requestBody);
@@ -227,14 +217,9 @@ void sendReadings() {
 
 void fetchCommands() {
   if (WiFi.status() != WL_CONNECTED) return;
-  static HTTPClient http;
-  static WiFiClientSecure secureClient;
-  static WiFiClient client;
-  static bool initialized = false;
-  if (!initialized) {
-    beginSecure(http, secureClient, client, String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE);
-    initialized = true;
-  }
+  HTTPClient http;
+  WiFiClientSecure client;
+  beginSecure(http, client, String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE);
   http.addHeader("x-zone-api-key", ZONE_API_KEY);
   int code = http.GET();
   if (code == 200) {
@@ -248,8 +233,9 @@ void fetchCommands() {
 
 void setup() {
   Serial.begin(115200);
+  randomSeed(analogRead(0));
   bootId = "boot-";
-  for (int i = 0; i < 8; i++) bootId += String(esp_random() % 16, HEX);
+  for (int i = 0; i < 8; i++) bootId += String(random(0, 16), HEX);
 
   pinMode(PIN_FIRE, INPUT_PULLUP);
   pinMode(PIN_GAS, INPUT);

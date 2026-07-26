@@ -36,8 +36,7 @@ export async function POST(request: NextRequest) {
       user: { id: user.id, name: user.name, email: user.email, role: user.role },
       csrfToken: session.csrfToken,
     });
-  } catch (error) {
-    console.error("[login] unexpected error:", error instanceof Error ? `${error.name}: ${error.message}\n${error.stack}` : error);
+  } catch {
     return NextResponse.json({ error: "INVALID_LOGIN", message: "Invalid request" }, { status: 422 });
   }
 }

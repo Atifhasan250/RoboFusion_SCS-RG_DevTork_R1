@@ -54,17 +54,11 @@ void enqueueReading(const String& payload) {
   queueCount++;
 }
 
-void beginSecure(HTTPClient& http, WiFiClientSecure& secureClient, WiFiClient& client, const String& url) {
-  if (url.startsWith("https://")) {
-    secureClient.setInsecure();
-    http.begin(secureClient, url);
-  } else {
-    http.begin(client, url);
-  }
+void beginSecure(HTTPClient& http, WiFiClientSecure& client, const String& url) {
+  client.setInsecure(); // Wokwi/demo transport. Production hardware should pin/verify the server CA.
+  http.begin(client, url);
   http.setConnectTimeout(8000);
   http.setTimeout(8000);
-  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  http.setReuse(true);
 }
 
 void ensureWiFiConnected() {
@@ -93,9 +87,8 @@ void applyActuators(bool buzzer, const char* leds, bool relay) {
 void acknowledgeCommand(const String& commandId) {
   if (WiFi.status() != WL_CONNECTED || commandId.length() == 0) return;
   HTTPClient http;
-  WiFiClientSecure secureClient;
-  WiFiClient client;
-  beginSecure(http, secureClient, client, String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE);
+  WiFiClientSecure client;
+  beginSecure(http, client, String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("x-zone-api-key", ZONE_API_KEY);
   StaticJsonDocument<128> body;
@@ -108,8 +101,8 @@ void acknowledgeCommand(const String& commandId) {
 
 void processCommand(JsonVariantConst command) {
   if (command.isNull()) return;
-  long version = command["command_version"] | 0;
-  if (version <= 0) version = command["state_version"] | -1;
+  long version = command["command_version"] | -1;
+  if (version < 0) version = command["state_version"] | -1;
   if (version <= lastAppliedCommandVersion) return;
   const char* led = command["led"] | "OFF";
   bool buzzer = command["buzzer"] | false;
@@ -121,37 +114,24 @@ void processCommand(JsonVariantConst command) {
 
 bool sendPostRequest(const String& requestBody, bool isQueued) {
   if (WiFi.status() != WL_CONNECTED) return false;
-  static HTTPClient http;
-  static WiFiClientSecure secureClient;
-  static WiFiClient client;
-  static bool initialized = false;
-  if (!initialized) {
-    beginSecure(http, secureClient, client, String(BACKEND_URL) + "/api/v1/readings/" + ZONE_CODE);
-    initialized = true;
-  }
-
+  HTTPClient http;
+  WiFiClientSecure client;
+  beginSecure(http, client, String(BACKEND_URL) + "/api/v1/readings/" + ZONE_CODE);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("x-zone-api-key", ZONE_API_KEY);
   int code = http.POST(requestBody);
   bool success = code == 200 || code == 201;
-  String responseBody = http.getString();
-  
   if (success && !isQueued) {
     StaticJsonDocument<768> response;
-    if (deserializeJson(response, responseBody) == DeserializationError::Ok
+    if (deserializeJson(response, http.getString()) == DeserializationError::Ok
         && response.containsKey("command")
         && !response["command"].isNull()) {
       processCommand(response["command"].as<JsonVariantConst>());
     }
-  } else if (!success) {
-    if (code > 0) {
-      Serial.printf("Reading API error %d: %s\n", code, responseBody.c_str());
-    } else {
-      Serial.printf("Reading API connection failed, code %d: %s\n", code, http.errorToString(code).c_str());
-      http.end();
-      initialized = false;
-    }
+  } else if (!success && code > 0) {
+    Serial.printf("Reading API error %d: %s\n", code, http.getString().c_str());
   }
+  http.end();
   return success;
 }
 
@@ -237,33 +217,25 @@ void sendReadings() {
 
 void fetchCommands() {
   if (WiFi.status() != WL_CONNECTED) return;
-  static HTTPClient http;
-  static WiFiClientSecure secureClient;
-  static WiFiClient client;
-  static bool initialized = false;
-  if (!initialized) {
-    beginSecure(http, secureClient, client, String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE);
-    initialized = true;
-  }
-  
+  HTTPClient http;
+  WiFiClientSecure client;
+  beginSecure(http, client, String(BACKEND_URL) + "/api/v1/commands/" + ZONE_CODE);
   http.addHeader("x-zone-api-key", ZONE_API_KEY);
   int code = http.GET();
-  String responseBody = http.getString();
   if (code == 200) {
     StaticJsonDocument<512> response;
-    if (deserializeJson(response, responseBody) == DeserializationError::Ok) {
+    if (deserializeJson(response, http.getString()) == DeserializationError::Ok) {
       processCommand(response.as<JsonVariantConst>());
     }
-  } else if (code < 0) {
-    http.end();
-    initialized = false;
   }
+  http.end();
 }
 
 void setup() {
   Serial.begin(115200);
+  randomSeed(analogRead(0));
   bootId = "boot-";
-  for (int i = 0; i < 8; i++) bootId += String(esp_random() % 16, HEX);
+  for (int i = 0; i < 8; i++) bootId += String(random(0, 16), HEX);
 
   pinMode(PIN_FIRE, INPUT_PULLUP);
   pinMode(PIN_GAS, INPUT);
