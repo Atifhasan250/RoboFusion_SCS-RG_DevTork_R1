@@ -108,8 +108,8 @@ void acknowledgeCommand(const String& commandId) {
 
 void processCommand(JsonVariantConst command) {
   if (command.isNull()) return;
-  long version = command["command_version"] | -1;
-  if (version < 0) version = command["state_version"] | -1;
+  long version = command["command_version"] | 0;
+  if (version <= 0) version = command["state_version"] | -1;
   if (version <= lastAppliedCommandVersion) return;
   const char* led = command["led"] | "OFF";
   bool buzzer = command["buzzer"] | false;
