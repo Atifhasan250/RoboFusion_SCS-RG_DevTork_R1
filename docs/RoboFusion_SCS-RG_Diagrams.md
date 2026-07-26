@@ -42,7 +42,7 @@ flowchart LR
     SSE[SSE fallback]
   end
 
-  FE[Frontend Dashboard<br/>Next.js + Tailwind UI]
+  FE[Frontend Dashboard<br/>not in this archive]
 
   Z1 & Z2 & Z3 & Z4 & Z5 -->|raw sensor POST| AUTH --> VAL --> RISK
   RISK -->|Mongo transaction| D1
@@ -235,6 +235,6 @@ flowchart TD
 ### Notes tying repo back to the PDF case
 - Repo implements **all 5 labs** (PDF required minimum 3) as Wokwi simulation (Track B), matching PDF Section 04.
 - Risk formula weights differ from the PDF's worked example (70/70/70/10 vs 40/25/20/15) — allowed per PDF Section 13 ("adapt or replace... as long as you explain them"); repo's `ARCHITECTURE.md` gives its own rationale.
-- **Frontend dashboard is FULLY implemented** in this archive, covering Section C (30 marks) completely. It directly fulfills the rubric's requirements for a Live Map, Priority Ranking, Ranking Reason, Incident Timeline, RBAC (Role-Based Access Control), and Real-time Notifications.
+- **Frontend dashboard is explicitly NOT included** in this archive (per its own README) — so Section C (30 marks) and parts of Section F/Video (Test Cases 12–16, 31) cannot be verified from this zip alone.
 - Bonus 1 (camera) is only stubbed as a dev cross-check flag (`cameraOccupancy`), not real image-based detection — repo README says so itself.
 - Backend, DB, and most edge-case/integration logic (Sections A, B, D, E) appear thoroughly implemented with tests (`tests/` folder covers concurrency, races, load, multi-zone priority).

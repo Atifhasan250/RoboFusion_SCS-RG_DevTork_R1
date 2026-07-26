@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: robofusion-scs-rg-devtork-r1
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/v1/system/ready
+    envVars:
+      - key: NODE_VERSION
+        value: 22.16.0
+      - key: APP_ENV
+        value: production
+      - key: MONGODB_DB
+        value: robofusion
+      - key: DEMO_PASSWORD
+        value: scs-grid
+      - key: OFFLINE_AFTER_MS
+        value: "20000"
+      - key: ML_MODEL_PATH
+        value: models/risk-model-v1.json
+      - key: MONGODB_URI
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ZONE_API_KEY_PEPPER
+        generateValue: true
+      - key: APP_ORIGIN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false

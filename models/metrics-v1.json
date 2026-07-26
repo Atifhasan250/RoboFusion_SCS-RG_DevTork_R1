@@ -1,23 +1,26 @@
 {
-  "accuracy": 0.9865103936311367,
+  "accuracy": 0.8731721874067443,
   "precision": 1,
-  "recall": 0.9730207872622734,
+  "recall": 0.6195165622202328,
   "specificity": 1,
-  "f1": 0.9863259358888142,
+  "f1": 0.7650635710337202,
   "confusionMatrix": [
     [
-      6783,
+      2234,
       0
     ],
     [
-      183,
-      6600
+      425,
+      692
     ]
   ],
+  "noHazardProbability": 0.08865198218131465,
   "dataset": {
-    "total": 75810,
-    "train": 62244,
-    "test": 13566
+    "total": 14442,
+    "train": 11091,
+    "test": 3351
   },
-  "note": "Simulated prediction of CRITICAL threshold crossing within future horizon."
+  "horizonMinutes": 2,
+  "source": "Synthetic/simulated data",
+  "note": "Held-out validation for CRITICAL threshold crossing within the next two minutes. Metrics do not represent field performance."
 }

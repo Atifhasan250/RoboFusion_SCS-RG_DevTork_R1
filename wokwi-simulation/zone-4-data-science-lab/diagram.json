@@ -23,7 +23,9 @@
       "top": -50,
       "left": -250,
       "attrs": {
-        "label": "Flame"
+        "label": "Flame",
+        "value": "1",
+        "bounce": "0"
       }
     },
     {
@@ -32,7 +34,9 @@
       "top": 50,
       "left": -250,
       "attrs": {
-        "label": "Occupancy Cross-check (sim)"
+        "label": "Occupancy Cross-check (sim)",
+        "value": "1",
+        "bounce": "0"
       }
     },
     {
@@ -41,7 +45,9 @@
       "top": 150,
       "left": -250,
       "attrs": {
-        "label": "Sensor Fault"
+        "label": "Sensor Fault",
+        "value": "1",
+        "bounce": "0"
       }
     },
     {
@@ -106,7 +112,9 @@
       "id": "relay",
       "top": 150,
       "left": 200,
-      "attrs": {}
+      "attrs": {
+        "transistor": "pnp"
+      }
     }
   ],
   "connections": [

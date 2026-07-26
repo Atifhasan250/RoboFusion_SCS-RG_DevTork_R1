@@ -1,7 +1,8 @@
 {
-  "version": "v1",
+  "version": "v2-synthetic-2min",
   "algorithm": "logistic-regression-gradient-descent",
-  "trainingData": "Synthetic simulated multi-sensor time-series (Horizon=600)",
+  "trainingData": "Deterministic synthetic 500 ms multi-sensor trajectories; stable, gas, water, fire and combined escalation profiles",
+  "horizonMinutes": 2,
   "features": [
     "gas",
     "water",
@@ -9,13 +10,14 @@
     "occupancy",
     "slope"
   ],
-  "intercept": -2.5890424642789016,
+  "intercept": -2.3302064497724495,
   "coefficients": {
-    "gas": 3.571018207531089,
-    "water": 3.5782856269142758,
-    "fire": 0,
-    "occupancy": -0.5042498305365385,
-    "slope": 0.10907096724221385
+    "gas": 4.444183795449618,
+    "water": 3.887892118057672,
+    "fire": 3.5637978175331897,
+    "occupancy": 0.9368073959467411,
+    "slope": 0.03846001918586593
   },
-  "trainedAt": "2026-07-25T20:05:06.218Z"
+  "trainedAt": "2026-07-26T12:18:15.560Z",
+  "safety": "Advisory only. This output is excluded from all buzzer, relay and LED actuation decisions."
 }

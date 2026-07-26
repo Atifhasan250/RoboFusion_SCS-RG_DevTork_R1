@@ -1,193 +1,131 @@
-# Multi-Hazard Smart Campus Safety & Response Grid (SCS-RG)
+# RoboFusion SCS-RG — Multi-Hazard Smart Campus Safety & Response Grid
 
 **Team:** DevTork  
-**Track:** Track B — Wokwi simulation  
-**Implemented scope in this archive:** five-zone sensing firmware, backend/API, MongoDB Atlas schema, incident/ranking logic, database tooling, resilience and integration tests.
+**Track:** Track B — five independent Wokwi ESP32 zone simulations  
+**Deployment target:** Render + MongoDB Atlas
 
-> The final submission PDF and demonstration video are intentionally outside this archive's requested fix scope.
+This repository contains the complete engineering prototype: frontend command dashboard, backend/API/WebSocket server, database schema and tooling, five Wokwi zone nodes, deterministic risk fusion, incident priority ranking, RBAC, resilience tests, short-term trend detection, trained ML prediction and validated natural-language incident reporting. The only remaining submission artifacts are the final documentation PDF and the narrated demonstration video.
 
-## Official five zones
+## Official zones
 
-1. `IOT_LAB` — IoT Lab
-2. `ROBOTICS_LAB` — Robotics Lab
-3. `SERVER_ROOM` — Server Room
-4. `DATA_SCIENCE_LAB` — Data Science Lab
-5. `SOFTWARE_LAB` — Software Lab
+`IOT_LAB`, `ROBOTICS_LAB`, `SERVER_ROOM`, `DATA_SCIENCE_LAB`, `SOFTWARE_LAB`.
 
-Each zone sends raw fire, gas, water-level and PIR data. The backend—not the ESP32 node—calculates risk, state, incident lifecycle and priority. Each Wokwi node has independent green/yellow/red LEDs, buzzer and relay actuation.
+Every zone reports raw fire, gas, water and PIR data. The backend is the sole authority for risk, `SAFE/WARNING/CRITICAL`, incidents, priority and actuator commands.
 
-## Important implemented behaviour
+## Implemented rubric-critical behavior
 
-- Five official zones and 20 required sensor records are seeded.
-- Raw readings are strictly validated and authenticated with per-zone API keys.
-- Gas is suppressed during the first 30 seconds of device warm-up.
-- Fire requires five consecutive positive samples; a short flicker does not trigger.
-- Sensor disconnection produces `OFFLINE` and preserves the last known risk/state/occupancy instead of reporting a false `SAFE` or empty zone.
-- Readings are deduplicated by `(zoneId, bootId, sequence)`.
-- Late/replayed readings are stored without overwriting authoritative current state.
-- Incidents remain active while a zone recovers through `WARNING`; they resolve only after confirmed `SAFE`.
-- Acknowledgment is transactional and first-write-wins.
-- Sensor/override command races use an atomic per-zone command version.
-- A `SILENCE` override can mute a buzzer but cannot disable a critical relay cutoff.
-- State is durable in MongoDB Atlas and is reconstructed after backend restart.
-- WebSocket and SSE infrastructure are present for the future frontend.
-- Trend, ML prediction and NLP reporting are advisory only and cannot actuate hardware.
+- 500 ms sampling with approximately one-second sustained-fire confirmation (two consecutive samples).
+- Thirty-second gas warm-up suppression; graded gas/water contributions.
+- PIR entry/exit flicker control and explicit per-sensor `OFFLINE` state.
+- Server-side validation, raw-value rejection, per-zone API-key authentication and retry deduplication.
+- Durable MongoDB transactions, first-write-wins acknowledgment and deterministic command versions.
+- Separate safety and connectivity state: a disconnected node never becomes a false `SAFE` or empty zone.
+- Real priority queue from risk, occupancy, critical duration and bounded validated NLP evidence, including a visible ranking reason.
+- Live WebSocket dashboard with reconnect-safe snapshot and two-second REST fallback.
+- Searchable/date-filtered incident history and durable trigger → acknowledge → recovery timeline.
+- Backend-enforced Admin/Security Staff RBAC and CSRF-protected mutations.
+- Audited manual overrides; a Critical relay cannot be disabled by `SILENCE` or `RESET`.
+- Backend restart recovery, bounded Wokwi offline cache/replay, late-reading protection and 20-second liveness threshold.
+- Bonus 2 trend indicator, Bonus 3 trained logistic-regression prediction (advisory only), Bonus 4 NLP-to-structured report with deterministic validation gate.
 
-## Prerequisites
+## Quick start
 
-- Node.js 20 or newer
-- npm 10 or newer
-- A MongoDB Atlas deployment with network access enabled
-- MongoDB Database Tools for `mongodump`/`mongorestore` when testing backup and recovery
-- k6 only when running the optional load test
-
-## Environment
-
-Copy the template and put the real Atlas URI only in `.env`:
+Requirements: Node.js 20+, npm 10+, MongoDB Atlas replica-set deployment.
 
 ```bash
 cp .env.example .env
-```
-
-Required values:
-
-```env
-MONGODB_URI=mongodb+srv://...
-MONGODB_DB=robofusion
-SESSION_SECRET=<random string, at least 32 characters>
-ZONE_API_KEY_PEPPER=<random string, at least 16 characters>
-APP_ORIGIN=http://localhost:3000
-APP_ENV=development
-DEMO_PASSWORD=<demo login password>
-```
-
-`.env` is ignored by Git. Do not commit the Atlas URI or provider API keys.
-
-For destructive integration tests, create a separate file:
-
-```bash
-cp .env.test.example .env.test
-```
-
-`MONGODB_DB` in `.env.test` **must end with `_test`**. Test scripts stop immediately otherwise.
-
-## Install and initialize
-
-```bash
 npm ci
 npm run db:migrate
 npm run db:seed
 npm run db:seed:verify
-npm run db:transactions:verify
+npm run dev
 ```
 
-After `.env.test` is configured, the full non-frontend verification entry point is:
+Open `http://localhost:3000`.
+
+Demo accounts (password is the `DEMO_PASSWORD` environment value; template default `scs-grid`):
+
+```text
+admin@scs.local   — ADMIN
+staff@scs.local   — SECURITY_STAFF
+```
+
+## Required environment
+
+```env
+MONGODB_URI=mongodb+srv://...
+MONGODB_DB=robofusion
+SESSION_SECRET=<at least 32 random characters>
+ZONE_API_KEY_PEPPER=<at least 16 random characters>
+APP_ORIGIN=http://localhost:3000
+APP_ENV=development
+DEMO_PASSWORD=scs-grid
+OFFLINE_AFTER_MS=20000
+```
+
+The five firmware development keys are `${ZONE_CODE}-demo-key`. `npm run db:seed` hashes them with `ZONE_API_KEY_PEPPER`; therefore a changed pepper must be followed by another seed. The production `start` script runs idempotent migration and seed automatically before the server starts.
+
+## Render deployment
+
+1. Push this repository to GitHub.
+2. Create a Render Web Service or use `render.yaml`.
+3. Set `MONGODB_URI`, `SESSION_SECRET`, `ZONE_API_KEY_PEPPER`, `APP_ORIGIN` and optional AI provider keys.
+4. Set `APP_ORIGIN` to the exact public HTTPS origin.
+5. Deploy. Start command: `npm start`.
+6. Confirm `/api/v1/system/ready`, then sign in and run the five Wokwi projects.
+
+Do not change `ZONE_API_KEY_PEPPER` after seeding unless the service is restarted so the automatic seed can regenerate matching hashes.
+
+## Wokwi
+
+Open all five projects under `wokwi-simulation/` in separate Wokwi tabs. The sketches use the deployed backend URL, send at 2 Hz, receive commands in the ingestion response and poll commands only every five seconds as a fallback. This avoids the former TLS/request burst that could make zones appear `UNAVAILABLE`. On reconnect, each node posts its newest live sample before gradually replaying cached history, so the dashboard can recover its online state immediately.
+
+Serial Monitor diagnosis:
+
+| Output | Meaning |
+|---|---|
+| `201`/no error | Reading accepted |
+| `401 INVALID_ZONE_KEY` | Pepper/seed/firmware key mismatch |
+| `422 INVALID_READING` | Invalid payload or impossible value |
+| timeout/negative HTTP result | Render/TLS/network issue |
+| `Clock not synchronized...` | Telemetry still sends; backend receipt time is used until NTP is ready |
+
+## Verification
+
+```bash
+npm run verify:all
+```
+
+Database/integration verification uses a separate `.env.test` whose database name ends in `_test`:
 
 ```bash
 npm run verify:backend
 ```
 
-Expected seed verification:
-
-```text
-5 configured official zones
-20 required sensor records (FIRE, GAS, WATER, PIR per zone)
-```
-
-Start the custom Next.js/API/WebSocket server:
+Additional evidence commands:
 
 ```bash
-npm run dev
-```
-
-Default address: `http://localhost:3000`.
-
-## Wokwi zone nodes
-
-Open the five projects under `wokwi-simulation/`. Each sketch contains the matching development key:
-
-```text
-IOT_LAB-demo-key
-ROBOTICS_LAB-demo-key
-SERVER_ROOM-demo-key
-DATA_SCIENCE_LAB-demo-key
-SOFTWARE_LAB-demo-key
-```
-
-The seed script hashes the same values with `ZONE_API_KEY_PEPPER`. Before a public deployment, replace these development keys in both the seed configuration and firmware.
-
-The camera-labelled switch is only a development occupancy cross-check input. It is **not** presented as an ESP32-CAM implementation or claimed as Camera Bonus 1.
-
-## Verification commands
-
-```bash
-# Static project checks
-npm run lint
-npm run typecheck
-npm run test:unit
-npm run build
-
-# Atlas schema/data checks
-npm run db:indexes:verify
-npm run db:integrity:check
-npm run db:seed:verify
-npm run db:transactions:verify
-
-# Destructive tests use .env.test only
-npm run test:integration
-npm run test:concurrency
-npm run test:ack-race
-npm run test:tc22
-npm run test:edge-load
-
-# Or run the complete destructive backend/database suite
-npm run test:db-suite
-
-# Query-performance evidence
+npm run ml:train
 npm run db:seed:readings
 npm run db:indexes:explain
-
-# Optional 30-zone load test; requires k6 and a running server
-npm run db:seed:phantoms
+npm run db:backup
 npm run test:load
 ```
 
-## Backup and safe restore test
+## Submission support documents
 
-Create a backup of the configured Atlas database:
-
-```bash
-npm run db:backup
-```
-
-Restore is deliberately blocked for the main database. Use a separate target whose name ends in `_test`:
-
-```bash
-RESTORE_TARGET_DB=robofusion_restore_test npm run db:restore -- backups/<archive>.archive.gz
-```
-
-Then point a test environment at the restored database and run:
-
-```bash
-npm run db:integrity:check
-npm run db:seed:verify
-```
-
-## Technical documentation
-
+- [PDF/rubric alignment checklist](docs/PDF_ALIGNMENT_CHECKLIST.md)
+- [Seven-minute video runbook](docs/VIDEO_DEMO_SCRIPT.md)
+- [Circuit and pinout documentation](docs/CIRCUIT_PINOUTS.md)
+- [Architecture and risk rules](docs/ARCHITECTURE.md)
 - [API reference](docs/API.md)
-- [Architecture and risk/priority rules](docs/ARCHITECTURE.md)
-- [Database schema, integrity and retention](docs/DATABASE.md)
-- [Wokwi five-zone setup](wokwi-simulation/README.md)
-- [Detailed code changes](FIXES_APPLIED.md)
-- [OpenAPI specification](openapi.yaml)
+- [Database schema and retention](docs/DATABASE.md)
+- [Wokwi operation](wokwi-simulation/README.md)
+- [Applied fixes](FIXES_APPLIED.md)
+- [Verification report](VERIFICATION_REPORT.md)
+- [Deployment checklist](docs/DEPLOYMENT_CHECKLIST.md)
+- [Machine-readable OpenAPI](openapi.yaml)
 
-## Current scope boundary
+## Scope statement
 
-This archive does not claim completion of:
-
-- Final submission documentation PDF
-- Seven-minute demonstration video
-- Actual ESP32-CAM image/frame processing
-
-Those omissions are explicit rather than hidden. Backend, database, frontend dashboard, and five-zone Wokwi work are integrated.
+This repository does **not** claim the physical ESP32-CAM camera bonus. The optional GPIO 21 switch is clearly labelled as a development occupancy cross-check. All core engineering requirements are implemented; the team must still create the final submission PDF and record the live video evidence.

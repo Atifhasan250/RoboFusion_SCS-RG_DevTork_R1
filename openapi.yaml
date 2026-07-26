@@ -116,7 +116,7 @@ paths:
                 password: { type: string, minLength: 8 }
             example:
               email: admin@scs.local
-              password: ChangeMe123!
+              password: scs-grid
       responses:
         "200":
           description: Login successful
@@ -171,11 +171,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [bootId, sequence, timestamp, fire, gas, water, pir, sensorHealth, deviceUptimeSeconds]
+              required: [bootId, sequence, fire, gas, water, pir, sensorHealth, deviceUptimeSeconds]
               properties:
                 bootId: { type: string, description: "Unique boot instance ID (changes on restart)" }
                 sequence: { type: integer, minimum: 0 }
-                timestamp: { type: string, format: date-time }
+                timestamp: { type: string, format: date-time, description: "Optional until device NTP sync; backend receipt time is used when omitted" }
                 fire: { type: boolean }
                 gas: { type: number, minimum: 0, maximum: 4095, description: "ADC value" }
                 water: { type: number, minimum: 0, maximum: 100 }
@@ -192,6 +192,7 @@ paths:
                 sensorHealth: { type: string, enum: [HEALTHY, DEGRADED, OFFLINE] }
                 deviceUptimeSeconds: { type: number, minimum: 0 }
                 sampleIntervalMs: { type: integer, minimum: 100, maximum: 60000, default: 500 }
+                clockSynchronized: { type: boolean, default: true, description: "False until device NTP is available; replayed unsynchronized samples are stored as late and cannot change live state" }
                 replayed: { type: boolean, default: false }
                 replayBatchLast: { type: boolean, default: false }
             example:
@@ -205,7 +206,8 @@ paths:
               sensorStatus: { fire: ONLINE, gas: ONLINE, water: ONLINE, pir: ONLINE }
               sensorHealth: HEALTHY
               deviceUptimeSeconds: 120
-              sampleIntervalMs: 200
+              sampleIntervalMs: 500
+              clockSynchronized: true
               replayed: false
               replayBatchLast: false
       responses:

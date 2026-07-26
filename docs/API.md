@@ -16,7 +16,7 @@ All risk scores, states and priorities are backend-computed.
 | POST | `/api/v1/commands/:zoneCode` | Zone API key | Idempotently acknowledge command application |
 | POST | `/api/v1/auth/login` | Public | Create HttpOnly session and return CSRF token |
 | POST | `/api/v1/auth/logout` | Session + CSRF | Destroy current session |
-| GET | `/api/v1/auth/me` | Session | Return current user and role |
+| GET | `/api/v1/auth/me` | Session | Return current user, role and CSRF token for reload recovery |
 | GET | `/api/v1/zones` | Session | Return all configured zones |
 | GET | `/api/v1/zones/status` | Session | Return all configured zone states and risk components |
 | GET | `/api/v1/dashboard/snapshot` | Session | Reconnect-safe authoritative system snapshot |
@@ -58,11 +58,14 @@ Content-Type: application/json
   },
   "sensorHealth": "HEALTHY",
   "deviceUptimeSeconds": 120,
-  "sampleIntervalMs": 200,
+  "sampleIntervalMs": 500,
+  "clockSynchronized": true,
   "replayed": false,
   "replayBatchLast": false
 }
 ```
+
+The `timestamp` field is normally supplied by the device. During initial NTP synchronization it may be omitted with `clockSynchronized=false`; the backend uses receipt time for a live sample. A replayed unsynchronized sample is retained as late history and cannot mutate current state or actuators.
 
 Raw ranges:
 

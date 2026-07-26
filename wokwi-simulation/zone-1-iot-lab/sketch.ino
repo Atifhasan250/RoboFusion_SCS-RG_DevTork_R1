@@ -28,12 +28,13 @@ unsigned long sequence = 1;
 unsigned long lastReadingTime = 0;
 unsigned long lastCommandTime = 0;
 unsigned long lastReconnectAttempt = 0;
-const unsigned long READING_INTERVAL = 1000;
-const unsigned long COMMAND_INTERVAL = 3000;
+const unsigned long READING_INTERVAL = 500; // 2 Hz: enough for ~1 s debounce without overloading Render/Atlas.
+const unsigned long COMMAND_INTERVAL = 5000; // POST responses carry commands; GET is only a recovery fallback.
 const unsigned long RECONNECT_INTERVAL = 5000;
 long lastAppliedCommandVersion = -1;
 
-const int MAX_QUEUE = 180; // ~36 seconds at 200 ms sampling.
+const int MAX_QUEUE = 120; // ~60 seconds at 500 ms sampling.
+const int MAX_REPLAY_PER_CYCLE = 3; // Prevent a reconnect burst from starving live telemetry.
 String offlineQueue[MAX_QUEUE];
 int queueHead = 0;
 int queueTail = 0;
@@ -56,8 +57,8 @@ void enqueueReading(const String& payload) {
 void beginSecure(HTTPClient& http, WiFiClientSecure& client, const String& url) {
   client.setInsecure(); // Wokwi/demo transport. Production hardware should pin/verify the server CA.
   http.begin(client, url);
-  http.setConnectTimeout(5000);
-  http.setTimeout(5000);
+  http.setConnectTimeout(8000);
+  http.setTimeout(8000);
 }
 
 void ensureWiFiConnected() {
@@ -127,9 +128,8 @@ bool sendPostRequest(const String& requestBody, bool isQueued) {
         && !response["command"].isNull()) {
       processCommand(response["command"].as<JsonVariantConst>());
     }
-  } else if (!success) {
-    if (code > 0) Serial.printf("Reading API error %d: %s\n", code, http.getString().c_str());
-    else Serial.printf("Reading API connection failed (code %d)\n", code);
+  } else if (!success && code > 0) {
+    Serial.printf("Reading API error %d: %s\n", code, http.getString().c_str());
   }
   http.end();
   return success;
@@ -147,10 +147,7 @@ String replayPayload(const String& original, bool lastInBatch) {
 
 String getTimestamp() {
   struct tm timeinfo;
-  if (!getLocalTime(&timeinfo, 100)) {
-    Serial.println("NTP sync pending... backend will assign server time temporarily.");
-    return "";
-  }
+  if (!getLocalTime(&timeinfo, 100)) return "";
   char value[32];
   strftime(value, sizeof(value), "%Y-%m-%dT%H:%M:%SZ", &timeinfo);
   return String(value);
@@ -158,7 +155,7 @@ String getTimestamp() {
 
 void sendReadings() {
   String timestamp = getTimestamp();
-  
+
   int rawMotion = digitalRead(PIN_MOTION);
   if (rawMotion == HIGH) {
     if (pirHighStart == 0) pirHighStart = millis();
@@ -174,7 +171,9 @@ void sendReadings() {
   StaticJsonDocument<768> doc;
   doc["bootId"] = bootId;
   doc["sequence"] = sequence++;
-  doc["timestamp"] = timestamp;
+  bool clockSynchronized = timestamp.length() > 0;
+  if (clockSynchronized) doc["timestamp"] = timestamp; // Backend safely falls back to receipt time until NTP is ready.
+  doc["clockSynchronized"] = clockSynchronized;
   doc["fire"] = digitalRead(PIN_FIRE) == LOW;
   doc["gas"] = analogRead(PIN_GAS);
   doc["water"] = map(analogRead(PIN_WATER), 0, 4095, 0, 100);
@@ -198,13 +197,22 @@ void sendReadings() {
     return;
   }
 
-  while (queueCount > 0) {
+  // Send the newest live observation first so the backend immediately restores
+  // liveness/state and returns the latest actuator command after a reconnect.
+  if (!sendPostRequest(payload, false)) {
+    enqueueReading(payload);
+    return;
+  }
+
+  // Drain a bounded number of historical samples only after current telemetry.
+  int replayedThisCycle = 0;
+  while (queueCount > 0 && replayedThisCycle < MAX_REPLAY_PER_CYCLE) {
     String queued = replayPayload(offlineQueue[queueHead], queueCount == 1);
     if (!sendPostRequest(queued, true)) break;
     queueHead = (queueHead + 1) % MAX_QUEUE;
     queueCount--;
+    replayedThisCycle++;
   }
-  if (!sendPostRequest(payload, false)) enqueueReading(payload);
 }
 
 void fetchCommands() {
@@ -247,7 +255,13 @@ void setup() {
   while (WiFi.status() != WL_CONNECTED && millis() - started < 15000) delay(250);
   if (WiFi.status() == WL_CONNECTED) Serial.println("WiFi connected");
   else Serial.println("WiFi unavailable; sampling will start after reconnection and time sync");
-  configTime(0, 0, "pool.ntp.org", "time.nist.gov", "time.google.com");
+  configTime(0, 0, "pool.ntp.org", "time.google.com");
+  struct tm timeinfo;
+  if (WiFi.status() == WL_CONNECTED && getLocalTime(&timeinfo, 10000)) {
+    Serial.println("Clock synchronized; live telemetry starting");
+  } else {
+    Serial.println("Clock not synchronized yet; backend receipt timestamps will be used temporarily");
+  }
 }
 
 void loop() {

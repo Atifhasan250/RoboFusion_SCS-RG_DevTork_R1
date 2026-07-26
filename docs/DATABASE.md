@@ -100,6 +100,11 @@ npm run db:seed:verify
 }
 ```
 
+
+## Liveness timestamps
+
+`observedAt` is the device observation time and may be old for cached replay. `receivedAt` is the backend receipt time. Zone liveness and `lastReadingAt` use receipt time, so an inaccurate ESP32 clock or replayed history cannot falsely mark a currently connected node Offline.
+
 ## Late and replayed data
 
 A reading with an observation time earlier than `zone_states.lastObservedAt` is stored with `isLate=true`. It does not update:

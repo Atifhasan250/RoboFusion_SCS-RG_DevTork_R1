@@ -1,6 +1,4 @@
-# Five-Zone Wokwi Hardware Simulation
-
-This folder contains one independent ESP32 zone node for each official lab:
+# Five-Zone Wokwi Simulation
 
 | Folder | Zone code |
 |---|---|
@@ -10,21 +8,9 @@ This folder contains one independent ESP32 zone node for each official lab:
 | `zone-4-data-science-lab` | `DATA_SCIENCE_LAB` |
 | `zone-5-software-lab` | `SOFTWARE_LAB` |
 
-## Components per zone
+Each project contains an ESP32, flame switch, gas and water potentiometers, PIR, sensor-fault switch, green/yellow/red LEDs, buzzer and relay. GPIO 21 is only a development occupancy cross-check switch and is not claimed as ESP32-CAM Bonus 1.
 
-- Flame switch
-- Gas potentiometer
-- Water-level potentiometer
-- PIR motion sensor
-- Occupancy cross-check development switch
-- Sensor-fault switch
-- Green, yellow and red LEDs
-- Buzzer
-- Relay module
-
-The occupancy cross-check switch is not an ESP32-CAM implementation and is not claimed as the camera bonus.
-
-## Pin mapping
+## Pin map
 
 | Component | GPIO |
 |---|---:|
@@ -32,66 +18,53 @@ The occupancy cross-check switch is not an ESP32-CAM implementation and is not c
 | Gas | 34 |
 | Water | 35 |
 | PIR | 12 |
-| Occupancy cross-check switch | 21 |
+| Occupancy cross-check | 21 |
 | Sensor fault | 15 |
-| Green LED | 25 |
-| Yellow LED | 26 |
-| Red LED | 27 |
+| Green / Yellow / Red LEDs | 25 / 26 / 27 |
 | Buzzer | 14 |
 | Relay | 32 |
 
-## Running each zone
+## Run
 
-1. Create/open an ESP32 project in Wokwi.
-2. Copy the zone folder's `sketch.ino` and `diagram.json`.
-3. Add the `ArduinoJson` library listed in `libraries.txt`.
-4. Change `BACKEND_URL` only when the deployment address differs.
-5. Run all five projects in separate tabs.
+Open each folder as a separate Wokwi project, retain `diagram.json`, install `ArduinoJson`, and start all five tabs. The current `BACKEND_URL` points to the Render deployment; change it only if the public origin changes.
 
-The sketches connect to `Wokwi-GUEST` and use HTTPS. `client.setInsecure()` is limited to Wokwi/demo transport; production physical hardware should verify or pin the server certificate.
+Development keys are `${ZONE_CODE}-demo-key` and must match the hashes produced by `npm run db:seed` under the deployment's `ZONE_API_KEY_PEPPER`.
 
-## Timing and behaviour
+## Timing
 
-- Sensor sampling: 200 ms
-- Command polling: 250 ms
-- Wi-Fi reconnect attempt: every 5 seconds
-- PIR entry debounce: about 1 second
-- PIR exit debounce: about 2 seconds
-- Fire confirmation: backend requires five samples, about 1 second
-- Gas warm-up: first 30 seconds ignored by backend
-- Offline cache: 180 readings, about 36 seconds at the configured sample interval
+- Sensor post: every 500 ms (2 Hz)
+- Backend fire confirmation: two samples ≈ one second
+- Command GET fallback: every five seconds; normal commands arrive in POST responses
+- PIR entry: one second; exit: two seconds
+- Gas warm-up: 30 seconds
+- Backend liveness timeout: 20 seconds by default
+- Cache: 120 samples ≈ 60 seconds
+- Reconnect behavior: the newest live reading is sent first, followed by a maximum of three cached readings per live cycle
 
-## Fault behaviour
+## Test controls
 
-Turning on `Sensor Fault` sends:
+All three slide switches start in the right-hand position (`value: 1`), so flame, occupancy cross-check and sensor fault are inactive at boot. Move a switch left to assert the corresponding active-low input. This prevents the default Wokwi switch position from falsely booting every zone as `OFFLINE`.
 
-```json
-{
-  "sensorHealth": "OFFLINE",
-  "sensorStatus": {
-    "fire": "OFFLINE",
-    "gas": "OFFLINE",
-    "water": "OFFLINE",
-    "pir": "OFFLINE"
-  }
-}
-```
+- Flame switch: one brief toggle stays Safe; hold for about one second to confirm fire.
+- Gas potentiometer: gradual movement produces proportional risk; first 30 seconds are warm-up.
+- Water potentiometer: gradual movement produces proportional risk.
+- PIR: entry/exit debounce avoids event spam.
+- Sensor Fault: sends all required sensors as Offline; last known safety is preserved.
 
-The backend preserves the last known state/risk/occupancy. It does not interpret disconnected sensors as empty or Safe.
-
-## Actuator rules
+## Actuation
 
 | State | LED | Buzzer | Relay |
 |---|---|---|---|
 | SAFE | Green | Off | Off |
 | WARNING | Yellow | Off | Off |
-| CRITICAL | Red | On | Cutoff on |
-| OFFLINE after prior SAFE | Off | Off | Off |
-| OFFLINE after prior WARNING | Yellow | Off | Off |
-| OFFLINE after prior CRITICAL | Red | On | Cutoff remains on |
+| CRITICAL | Red | On | Cutoff on (relay simulation is configured active-high) |
+| OFFLINE | Last safe command policy; dashboard shows Offline | Never treated as false recovery | Critical cutoff remains if already active |
 
-Commands carry an increasing `command_version`. Each ESP32 applies a version only once and acknowledges the command back to the server.
+Commands have an increasing `command_version`; a node ignores older or duplicate commands and acknowledges the applied command.
 
-## Development keys
+## Serial troubleshooting
 
-The sketches currently use the seed-compatible demo keys. Replace them before any public/non-demo deployment.
+- `401 INVALID_ZONE_KEY`: deployment pepper or seeded key does not match the sketch.
+- `422 INVALID_READING`: inspect the response body for invalid field/range.
+- HTTP timeout: verify Render is awake and URL is exact; after recovery the node posts the newest live sample first and then drains the bounded cache gradually.
+- NTP delay: the sketch continues sending without `timestamp`; backend receipt time is used until synchronization.

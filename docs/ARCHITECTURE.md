@@ -1,46 +1,44 @@
-# SCS-RG Backend and Five-Zone Architecture
+# SCS-RG System Architecture
 
-## Data path
+## End-to-end data path
 
 ```mermaid
 flowchart LR
-  Z1[IoT Lab ESP32] --> API
-  Z2[Robotics Lab ESP32] --> API
-  Z3[Server Room ESP32] --> API
-  Z4[Data Science Lab ESP32] --> API
-  Z5[Software Lab ESP32] --> API
-  API[Zone-authenticated raw-reading API] --> V[Strict validation and deduplication]
-  V --> R[Server-side risk + hysteresis]
-  R --> TX[MongoDB transaction]
-  TX --> DB[(MongoDB Atlas)]
-  TX --> I[Incident lifecycle + priority]
-  TX --> C[Versioned actuator command]
-  C --> Z1
-  C --> Z2
-  C --> Z3
-  C --> Z4
-  C --> Z5
-  DB --> WS[WebSocket / SSE / snapshot APIs]
-  WS --> FUTURE[Future frontend dashboard]
+  Z1[IoT Lab Wokwi ESP32] --> INGEST
+  Z2[Robotics Lab Wokwi ESP32] --> INGEST
+  Z3[Server Room Wokwi ESP32] --> INGEST
+  Z4[Data Science Lab Wokwi ESP32] --> INGEST
+  Z5[Software Lab Wokwi ESP32] --> INGEST
+  INGEST[Zone-authenticated raw-reading API] --> VALIDATE[Strict validation + deduplication]
+  VALIDATE --> RISK[Server-side risk, debounce, hysteresis]
+  RISK --> TX[MongoDB transaction]
+  TX --> DB[(MongoDB Atlas source of truth)]
+  TX --> INCIDENT[Incident lifecycle + priority ranking]
+  TX --> COMMAND[Versioned actuator command]
+  COMMAND --> Z1
+  COMMAND --> Z2
+  COMMAND --> Z3
+  COMMAND --> Z4
+  COMMAND --> Z5
+  DB --> SNAP[Authoritative dashboard snapshot]
+  SNAP --> WS[WebSocket]
+  SNAP --> SSE[SSE]
+  SNAP --> REST[REST polling fallback]
+  WS --> UI[Role-based command dashboard]
+  SSE --> UI
+  REST --> UI
 ```
 
-The frontend is outside the current fix scope. The API and real-time gateway remain ready for it.
+## Responsibility boundaries
 
-## Responsibilities
-
-| Component | Responsibility |
+| Layer | Responsibility |
 |---|---|
-| ESP32/Wokwi node | Sample raw sensors, debounce PIR locally, cache during network loss, replay data, apply versioned commands |
-| Ingestion API | Authenticate zone, validate raw values, reject malformed/impossible input, deduplicate retries |
-| Risk engine | Normalize raw signals, enforce gas warm-up and fire debounce, compute risk and state |
-| MongoDB Atlas | Durable source of truth for zone state, readings, incidents, events, acknowledgments, commands and users |
-| Incident engine | Open on confirmed Critical, keep active through Warning, resolve only after Safe |
-| Priority engine | Rank currently Critical zones by risk, occupancy, duration and bounded validated NLP evidence |
-| Command service | Atomically allocate per-zone versions and enforce safe override semantics |
+| ESP32/Wokwi | Sample raw values, debounce PIR, report sensor health, cache/replay on network loss, apply only newer commands |
+| API/backend | Authenticate, validate, deduplicate, compute risk/state, create incidents, rank priorities, enforce RBAC/CSRF |
+| MongoDB Atlas | Durable zones, sensor history, incidents/events, acknowledgments, users/roles, commands, overrides and predictions |
+| Dashboard | Live map, explicit Offline display, priority rationale, alert stack/audio, history/timeline, role-specific actions |
 
-## Risk fusion formula
-
-The case permits teams to adapt the example weights when they explain them. This build uses:
+## Risk fusion
 
 ```text
 risk_score = min(100,
@@ -49,131 +47,70 @@ risk_score = min(100,
   + 70 × water_factor
   + 10 × occupancy_factor
 )
+
+risk < 30       → SAFE
+30 ≤ risk < 65  → WARNING
+risk ≥ 65       → CRITICAL
 ```
 
-Classification:
+The cap keeps the operator scale at 0–100. Each genuine hazard can independently reach Critical. Occupancy is a human-exposure modifier and has an additional priority-ranking contribution.
+
+### Sensor processing
+
+- **Fire:** 500 ms sampling; two consecutive positive readings ≈ one second; two clear readings remove confirmation, then recovery hysteresis applies.
+- **Gas:** `clamp((raw - 1200) / (3000 - 1200), 0, 1)`; ignored for the first 30 seconds after device boot.
+- **Water:** `clamp(level / 80, 0, 1)` for input range 0–100.
+- **PIR:** approximately one-second entry and two-second exit stability; a disconnected PIR is Offline, never silently empty.
+
+## Safety versus connectivity
+
+Safety (`SAFE/WARNING/CRITICAL`) and connectivity (`ONLINE/DEGRADED/OFFLINE/NOT_CONFIGURED`) are separate fields. When required sensors or transport fail, the backend preserves the last known risk, occupancy, active incident and safety command. The dashboard shows `OFFLINE/UNAVAILABLE` while explicitly retaining the last known safety state.
+
+Backend liveness uses **server receipt time**, not the device clock. This prevents stale NTP or replayed observation timestamps from falsely making a live node Offline. Replayed samples captured before NTP synchronization are stored as late evidence and cannot mutate current state or actuators. Default Offline timeout: 20 seconds.
+
+## State and incident hysteresis
 
 ```text
-risk < 30       SAFE
-30 ≤ risk < 65  WARNING
-risk ≥ 65       CRITICAL
-```
-
-Rationale:
-
-- A confirmed fire must be capable of causing Critical by itself.
-- Critical gas concentration must be capable of causing Critical by itself.
-- Critical flood/leak level must be capable of causing Critical by itself.
-- Occupancy is a human-exposure modifier, not a hazard that independently triggers cutoff.
-- The score is capped at 100 for a stable operator-facing scale.
-- Occupancy has an additional explicit role in cross-zone priority ranking.
-
-## Sensor processing
-
-### Fire
-
-- Sample interval: 200 ms
-- Confirmation: five consecutive positive samples, approximately one second
-- Shorter flicker: ignored
-- Clear: three consecutive clear samples
-- State recovery then follows the five-second hysteresis window
-
-### Gas
-
-```text
-gas_factor = clamp((gas_raw - 1200) / (3000 - 1200), 0, 1)
-```
-
-The first 30 seconds of device uptime produce zero gas contribution.
-
-### Water
-
-```text
-water_factor = clamp(water_level / 80, 0, 1)
-```
-
-The accepted payload range is 0–100.
-
-### Occupancy
-
-- PIR entry must remain high for approximately one second.
-- Exit must remain low for approximately two seconds.
-- If PIR is offline, the backend preserves last known occupancy instead of assuming empty.
-- `cameraOccupancy` is only a development cross-check switch; it is not an image-based camera bonus.
-
-## Safety and connectivity are separate
-
-`zone_states.safetyState` is one of `SAFE`, `WARNING`, `CRITICAL`.  
-`zone_states.connectivityState` is one of `ONLINE`, `DEGRADED`, `OFFLINE`, `NOT_CONFIGURED`.
-
-A sensor/network fault does not prove a hazard disappeared. Therefore an `OFFLINE` report preserves:
-
-- last safety state
-- last risk score and components
-- last occupancy
-- active incident
-- critical relay state when already critical
-
-## Hysteresis and incident lifecycle
-
-```text
-SAFE → WARNING: risk ≥ 30 for two consecutive valid readings
-SAFE/WARNING → CRITICAL: risk ≥ 65 for two consecutive valid readings
-Confirmed fire → CRITICAL immediately after the five-sample fire debounce
+SAFE → WARNING: risk ≥ 30 for two valid readings
+SAFE/WARNING → CRITICAL: risk ≥ 65 for two valid readings
+Confirmed fire: CRITICAL immediately after the fire debounce
 CRITICAL → WARNING: risk < 55 continuously for at least five seconds
 WARNING → SAFE: risk < 25 continuously for at least five seconds
 ```
 
-Incident lifecycle:
-
-```text
-Critical → create one active incident
-Critical → Warning → incident remains active
-Warning → Critical → same incident continues
-Warning → Safe → incident resolves
-Resolved hazard triggers later → a new incident is created
-```
+One incident remains active through a Critical → Warning recovery and closes only at confirmed Safe. A later new trigger creates a new incident.
 
 ## Priority ranking
 
 ```text
-priority_score = risk_score
-               + (occupied ? 10 : 0)
+priority_score = current risk
+               + 10 when occupied
                + min(10, critical_duration_seconds / 30)
-               + bounded_matching_NLP_bonus
+               + validated matching NLP bonus (0, 3 or 7)
 ```
 
-NLP bonus is `0`, `3` or `7` and applies only when the report is recent, validated, matches the active incident's zone and hazard, and the zone is currently Critical.
+Tie-breaks: priority score, risk, occupied first, earliest Critical time, then zone code. The API returns `ranking_reason`; the frontend displays this exact backend explanation rather than a hardcoded sentence.
 
-Tie-break order:
+## Real-time reliability
 
-1. Higher priority score
-2. Higher risk score
-3. Occupied before empty
-4. Earlier `criticalSince`
-5. Alphabetical zone code
+- WebSocket sends a complete authoritative snapshot immediately after authentication.
+- State/incident events trigger a debounced authoritative refresh.
+- Browser reconnect uses exponential backoff.
+- When WebSocket is unavailable, the dashboard polls `/api/v1/dashboard/snapshot` every two seconds; while connected it performs a 15-second consistency refresh.
+- Wokwi posts at 2 Hz and polls commands every five seconds only as fallback; each POST response also contains the latest command.
+- Offline queue holds about 60 seconds and replays at most three cached samples per live cycle to avoid reconnect bursts.
 
-## Concurrency model
+## Concurrency and safety
 
-- Unique reading index: `(zoneId, bootId, sequence)`
-- One active incident per zone: partial unique index
-- One acknowledgment per incident: unique index
-- One command version per zone: unique index
-- Ingestion updates state using `stateVersion` optimistic concurrency
-- Sensor ingestion and override writers allocate command versions with atomic `$inc`
-- MongoDB transactions atomically write reading, state, incident/event and command changes
+- Unique reading `(zoneId, bootId, sequence)` prevents duplicate retries.
+- One active incident per zone and one acknowledgment per incident.
+- Transactions atomically write reading/state/incident/event/command.
+- Per-zone command version is allocated atomically, resolving sensor/override races.
+- `SILENCE` cannot turn off a Critical relay; `RESET` cannot force a sensor-derived Critical state to Safe.
 
-## Override safety
+## Bonus separation
 
-- `SILENCE` may turn off the buzzer but never a Critical relay cutoff.
-- `RESET` cannot force a Critical zone to Safe.
-- `TEST_ACTUATOR` is audited and versioned.
-- The highest command version is applied once by firmware.
-
-## Resilience
-
-- Backend restart reloads all current zone and incident state from Atlas.
-- Every reconnecting real-time client receives a full snapshot.
-- Firmware caches up to 180 readings and replays them in sequence.
-- Replayed old timestamps are stored as late data but cannot overwrite current state.
-- `CACHED_READINGS_SYNCED` is logged on the final replayed sample.
+- Short-term trend uses recent live risk slope.
+- ML prediction is a trained logistic-regression probability for the next two minutes, visibly separate from live risk and advisory-only.
+- Natural-language reports must map to a configured zone/hazard/severity and pass deterministic validation before a bounded priority bonus can apply.
+- None of these bonus outputs can directly actuate buzzer, relay or LEDs.
