@@ -16,7 +16,6 @@ import {
 import type {
   ActuatorCommand,
   ConnectivityState,
-  HazardType,
   Incident,
   IncidentEvent,
   SafetyState,
@@ -58,8 +57,8 @@ const GAS_BASELINE = 1200;
 const GAS_CRITICAL = 3000;
 const WATER_DRY = 0;
 const WATER_CRITICAL = 80;
-const FIRE_DEBOUNCE = 5;
-const FIRE_CLEAR = 3;
+const FIRE_DEBOUNCE = 2;
+const FIRE_CLEAR = 2;
 const MAX_RETRIES = 4;
 
 function statusFor(data: Payload, sensor: "fire" | "gas" | "water" | "pir"): SensorCalibration["status"] {
@@ -258,7 +257,7 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload): Pr
   if (!stateResult) throw new IngestionError(500, "STATE_BOOTSTRAP_FAILED", "Could not initialize zone state");
   const zs = stateResult;
 
-  const isLate = !!(zs.lastObservedAt && data.timestamp < zs.lastObservedAt);
+  const isLate = (data.replayed && !data.clockSynchronized) || !!(zs.lastObservedAt && data.timestamp < zs.lastObservedAt);
   const warmingUp = data.deviceUptimeSeconds < 30;
   const requiredSensorUnavailable = (["fire", "gas", "water", "pir"] as const).some(sensor => {
     const status = data.sensorStatus?.[sensor];
@@ -405,6 +404,7 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload): Pr
         observedAt: data.timestamp,
         uptimeMs: data.deviceUptimeSeconds * 1000,
         sampleIntervalMs: data.sampleIntervalMs,
+        clockSynchronized: data.clockSynchronized,
         replayed: data.replayed,
         replayBatchLast: data.replayBatchLast,
         fire: data.fire,
@@ -479,8 +479,9 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload): Pr
           occupancy,
           cameraOccupancy: data.cameraOccupancy ?? zone.cameraOccupancy ?? false,
           connectivityState,
-          lastReadingAt: data.timestamp,
-          lastReceivedAt: now,
+          // Transport liveness must use server receipt time. Device timestamps are
+          // retained separately as observedAt and may be old during cache replay.
+          lastReadingAt: now,
           lastSequence: data.sequence,
           updatedAt: now,
         } },
@@ -490,7 +491,7 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload): Pr
         throw new IngestionError(409, "ZONE_ARCHIVED_DURING_INGEST", "Zone was archived while the reading was being processed");
       }
 
-      let activeIncident = await c.incidents.findOne({ zoneId: zone.id, active: true }, { session });
+      let activeIncident: Incident | null = (await c.incidents.findOne({ zoneId: zone.id, active: true }, { session })) as Incident | null;
 
       if (nextSafetyState === "CRITICAL" && !activeIncident) {
         const newIncident: Omit<Incident, "_id"> = {
@@ -515,7 +516,7 @@ async function doIngest(zoneCode: string, key: string | null, data: Payload): Pr
           hazard: calculatedRisk.primaryHazard,
         };
         await c.incidents.insertOne(newIncident, { session });
-        activeIncident = newIncident as any;
+        activeIncident = newIncident as unknown as Incident;
         incidentOpened = true;
         await c.incident_events.insertOne(buildEvent(
           "INCIDENT_OPENED",

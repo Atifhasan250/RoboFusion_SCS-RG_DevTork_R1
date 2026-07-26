@@ -11,8 +11,9 @@ export class RateLimiter {
   constructor(windowMs: number, maxRequests: number) {
     this.windowMs = windowMs;
     this.maxRequests = maxRequests;
-    // Periodically clean up old entries to prevent memory leak
-    setInterval(() => this.cleanup(), windowMs * 2).unref();
+    // Periodically clean up old entries to prevent memory leak.
+    const cleanupTimer = setInterval(() => this.cleanup(), windowMs * 2);
+    (cleanupTimer as unknown as { unref?: () => void }).unref?.();
   }
 
   /** Returns true if the request should be allowed, false if rate-limited */

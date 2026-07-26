@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from "zod";
 import { env } from "../config/env";
 import { noteSchema } from "../validation/schemas";

@@ -8,8 +8,11 @@ export const readingSchema = z.object({
   bootId: z.string().min(1).max(64).default("default"),
   /** Monotonically increasing sequence number per boot. */
   sequence: z.number().int().nonnegative(),
-  /** ISO timestamp of sensor observation. Gracefully fallback to server time if client NTP fails. */
-  timestamp: z.coerce.date().catch(() => new Date()).refine(
+  /** ISO timestamp of sensor observation. If a node has not completed NTP sync, receipt time is used. */
+  timestamp: z.preprocess(
+    value => value === "" || value === null ? undefined : value,
+    z.coerce.date().optional(),
+  ).transform(value => value ?? new Date()).refine(
     date => date.getTime() <= Date.now() + 30_000,
     { message: "Timestamp cannot be more than 30 seconds in the future" },
   ),
@@ -28,6 +31,8 @@ export const readingSchema = z.object({
   sensorHealth: z.enum(["HEALTHY", "DEGRADED", "OFFLINE"]),
   deviceUptimeSeconds: z.number().nonnegative(),
   sampleIntervalMs: z.number().int().min(100).max(60_000).default(500),
+  /** Whether the device had an absolute NTP clock for this observation. */
+  clockSynchronized: z.boolean().optional().default(true),
   /** True when a locally cached reading is being replayed after reconnection. */
   replayed: z.boolean().optional().default(false),
   /** True only for the final reading in a replay batch. */

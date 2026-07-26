@@ -134,7 +134,7 @@ export interface HysteresisInput {
 }
 
 export function applyHysteresis(input: HysteresisInput): SafetyState {
-  const { currentState, newRiskScore, consecutiveAboveThreshold, consecutiveBelowThreshold, recoveryStableMs, fireJustConfirmed } = input;
+  const { currentState, newRiskScore, consecutiveAboveThreshold, recoveryStableMs, fireJustConfirmed } = input;
 
   // Immediate CRITICAL on confirmed fire regardless of hysteresis
   if (fireJustConfirmed && newRiskScore >= 65) return "CRITICAL";

@@ -14,6 +14,7 @@ const schema = z.object({
   AI_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
   ML_MODEL_PATH: z.string().default("models/risk-model-v1.json"),
   LOG_LEVEL: z.string().default("info"),
+  OFFLINE_AFTER_MS: z.coerce.number().int().min(10_000).max(120_000).default(20_000),
 });
 
 export const env = schema.parse(process.env);

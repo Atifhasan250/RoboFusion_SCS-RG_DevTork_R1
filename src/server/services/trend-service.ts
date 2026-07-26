@@ -1,7 +1,11 @@
 import { collections } from "../db/collections";
 
 export async function riskTrend(zoneId: string) {
-  const readings = await (await collections()).readings.find({ zoneId }).sort({ observedAt: -1 }).limit(8).toArray();
+  const readings = await (await collections()).readings
+    .find({ zoneId, isLate: false, isWarmingUp: false, sensorHealth: { $ne: "OFFLINE" } })
+    .sort({ receivedAt: -1 })
+    .limit(8)
+    .toArray();
   
   if (readings.length < 5) return { status: "INSUFFICIENT_DATA", slope: 0, window: readings.length };
   

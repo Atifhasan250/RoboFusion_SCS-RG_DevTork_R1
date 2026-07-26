@@ -53,7 +53,6 @@ export interface Zone {
   cameraOccupancy?: boolean;
   connectivityState: ConnectivityState;
   lastReadingAt: Date | null;
-  lastReceivedAt: Date | null;
   lastSequence: number | null;
   commandVersion: number;
   createdAt: Date;
@@ -125,6 +124,7 @@ export interface Reading {
   observedAt: Date;
   uptimeMs: number;
   sampleIntervalMs: number;
+  clockSynchronized: boolean;
   replayed: boolean;
   replayBatchLast: boolean;
   fire: boolean;
