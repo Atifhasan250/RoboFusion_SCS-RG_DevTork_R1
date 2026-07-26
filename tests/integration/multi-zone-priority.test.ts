@@ -6,11 +6,12 @@ import { ingest } from "../../src/server/services/ingestion-service";
 import { priorityQueue } from "../../src/server/services/incident-service";
 import { env } from "../../src/server/config/env";
 import { hashSecret } from "../../src/server/utils/id";
-import { ObjectId } from "mongodb";
+import { assertTestDatabase } from "../../src/server/db/test-safety";
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 describe("Multi-Zone Priority Ranking", () => {
   beforeAll(async () => {
+    assertTestDatabase();
     const c = await collections();
     await c.zones.deleteMany({});
     await c.zone_states.deleteMany({});
@@ -18,11 +19,13 @@ describe("Multi-Zone Priority Ranking", () => {
     await c.readings.deleteMany({});
     await c.actuator_commands.deleteMany({});
     
-    // Create 3 zones
+    // Create all five official zones
     const zones = [
-      { id: "zone-a", code: "ZONE_A", name: "Zone A", configured: true, apiKeyHash: hashSecret("key-a", env.ZONE_API_KEY_PEPPER), state: "SAFE", riskScore: 0, primaryHazard: null, occupancy: false, connectivityState: "ONLINE", commandVersion: 0, createdAt: new Date(), updatedAt: new Date() },
-      { id: "zone-b", code: "ZONE_B", name: "Zone B", configured: true, apiKeyHash: hashSecret("key-b", env.ZONE_API_KEY_PEPPER), state: "SAFE", riskScore: 0, primaryHazard: null, occupancy: false, connectivityState: "ONLINE", commandVersion: 0, createdAt: new Date(), updatedAt: new Date() },
-      { id: "zone-c", code: "ZONE_C", name: "Zone C", configured: true, apiKeyHash: hashSecret("key-c", env.ZONE_API_KEY_PEPPER), state: "SAFE", riskScore: 0, primaryHazard: null, occupancy: false, connectivityState: "ONLINE", commandVersion: 0, createdAt: new Date(), updatedAt: new Date() },
+      { id: "zone-a", code: "ZONE_A", name: "Zone A", configured: true, apiKeyHash: hashSecret("key-a", env.ZONE_API_KEY_PEPPER), state: "SAFE", riskScore: 0, primaryHazard: null, occupancy: false, connectivityState: "ONLINE", lastReadingAt: null, lastSequence: null, commandVersion: 0, createdAt: new Date(), updatedAt: new Date() },
+      { id: "zone-b", code: "ZONE_B", name: "Zone B", configured: true, apiKeyHash: hashSecret("key-b", env.ZONE_API_KEY_PEPPER), state: "SAFE", riskScore: 0, primaryHazard: null, occupancy: false, connectivityState: "ONLINE", lastReadingAt: null, lastSequence: null, commandVersion: 0, createdAt: new Date(), updatedAt: new Date() },
+      { id: "zone-c", code: "ZONE_C", name: "Zone C", configured: true, apiKeyHash: hashSecret("key-c", env.ZONE_API_KEY_PEPPER), state: "SAFE", riskScore: 0, primaryHazard: null, occupancy: false, connectivityState: "ONLINE", lastReadingAt: null, lastSequence: null, commandVersion: 0, createdAt: new Date(), updatedAt: new Date() },
+      { id: "zone-d", code: "ZONE_D", name: "Zone D", configured: true, apiKeyHash: hashSecret("key-d", env.ZONE_API_KEY_PEPPER), state: "SAFE", riskScore: 0, primaryHazard: null, occupancy: false, connectivityState: "ONLINE", lastReadingAt: null, lastSequence: null, commandVersion: 0, createdAt: new Date(), updatedAt: new Date() },
+      { id: "zone-e", code: "ZONE_E", name: "Zone E", configured: true, apiKeyHash: hashSecret("key-e", env.ZONE_API_KEY_PEPPER), state: "SAFE", riskScore: 0, primaryHazard: null, occupancy: false, connectivityState: "ONLINE", lastReadingAt: null, lastSequence: null, commandVersion: 0, createdAt: new Date(), updatedAt: new Date() },
     ];
     await c.zones.insertMany(zones as any);
   });
@@ -43,14 +46,22 @@ describe("Multi-Zone Priority Ranking", () => {
     // 2. Zone B: Gas (70) + Occupied (+10) -> 80
     for (let i = 0; i < 2; i++) {
       await ingest("ZONE_B", "key-b", {
-        bootId: "boot-b", sequence: i, timestamp: new Date(), fire: false, gas: 4200, water: 0, pir: true, sensorHealth: "HEALTHY", deviceUptimeSeconds: 100, sampleIntervalMs: 500
+        bootId: "boot-b", sequence: i, timestamp: new Date(), fire: false, gas: 4095, water: 0, pir: true, sensorHealth: "HEALTHY", deviceUptimeSeconds: 100, sampleIntervalMs: 500
       });
     }
     
-    // 3. Zone C: Safe
-    await ingest("ZONE_C", "key-c", {
-      bootId: "boot-c", sequence: 1, timestamp: new Date(), fire: false, gas: 1200, water: 0, pir: false, sensorHealth: "HEALTHY", deviceUptimeSeconds: 100, sampleIntervalMs: 500
-    });
+    // 3. Remaining three zones stay SAFE, proving a five-zone deployment does not pollute the queue.
+    await Promise.all([
+      ingest("ZONE_C", "key-c", {
+        bootId: "boot-c", sequence: 1, timestamp: new Date(), fire: false, gas: 1200, water: 0, pir: false, sensorHealth: "HEALTHY", deviceUptimeSeconds: 100, sampleIntervalMs: 500
+      }),
+      ingest("ZONE_D", "key-d", {
+        bootId: "boot-d", sequence: 1, timestamp: new Date(), fire: false, gas: 1200, water: 0, pir: false, sensorHealth: "HEALTHY", deviceUptimeSeconds: 100, sampleIntervalMs: 500
+      }),
+      ingest("ZONE_E", "key-e", {
+        bootId: "boot-e", sequence: 1, timestamp: new Date(), fire: false, gas: 1200, water: 0, pir: false, sensorHealth: "HEALTHY", deviceUptimeSeconds: 100, sampleIntervalMs: 500
+      }),
+    ]);
 
     const activeIncidents = await priorityQueue();
     

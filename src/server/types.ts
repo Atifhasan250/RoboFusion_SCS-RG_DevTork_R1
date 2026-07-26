@@ -52,8 +52,8 @@ export interface Zone {
   occupancy: boolean;
   cameraOccupancy?: boolean;
   connectivityState: ConnectivityState;
-  lastReadingAt?: Date;
-  lastSequence?: number;
+  lastReadingAt: Date | null;
+  lastSequence: number | null;
   commandVersion: number;
   createdAt: Date;
   updatedAt: Date;
@@ -124,6 +124,8 @@ export interface Reading {
   observedAt: Date;
   uptimeMs: number;
   sampleIntervalMs: number;
+  replayed: boolean;
+  replayBatchLast: boolean;
   fire: boolean;
   gas: number;
   water: number;
@@ -253,6 +255,8 @@ export interface NaturalLanguageReport {
   estimatedSeverity: "LOW" | "MEDIUM" | "HIGH" | null;
   summary: string | null;
   validationStatus: "ACCEPTED" | "REJECTED";
+  linkedIncidentId: string | null;
+  rankingBoost: number;
   createdAt: Date;
 }
 

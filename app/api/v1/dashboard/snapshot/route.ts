@@ -17,7 +17,7 @@ export async function GET() {
     const c = await collections();
 
     const [zones, incidents, queue, systemHealth] = await Promise.all([
-      c.zones.find({}, { projection: { _id: 0, apiKeyHash: 0 } }).sort({ code: 1 }).toArray(),
+      c.zones.find({ configured: true }, { projection: { _id: 0, apiKeyHash: 0 } }).sort({ code: 1 }).toArray(),
       c.incidents.find({ active: true }, { projection: { _id: 0 } }).sort({ startedAt: -1 }).toArray(),
       priorityQueue(),
       c.zones.aggregate([

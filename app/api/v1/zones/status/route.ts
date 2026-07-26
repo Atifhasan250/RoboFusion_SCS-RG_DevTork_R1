@@ -16,7 +16,7 @@ export async function GET(_request: NextRequest) {
 
     const zones = await c.zones
       .aggregate([
-        { $match: {} },
+        { $match: { configured: true } },
         { $project: { _id: 0, apiKeyHash: 0 } },
         {
           $lookup: {

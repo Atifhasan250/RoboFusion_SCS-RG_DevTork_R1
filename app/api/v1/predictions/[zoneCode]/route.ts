@@ -9,7 +9,7 @@ export async function GET(_: Request, ctx: { params: Promise<{ zoneCode: string 
     await requireUser();
     const { zoneCode } = await ctx.params;
     const c = await collections();
-    const zone = await c.zones.findOne({ code: zoneCode });
+    const zone = await c.zones.findOne({ code: zoneCode, configured: true });
     if (!zone) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
     
     const readings = await c.readings.find({ zoneId: zone.id }).sort({ observedAt: -1 }).limit(6).toArray();

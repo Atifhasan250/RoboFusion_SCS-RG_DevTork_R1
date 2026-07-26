@@ -110,7 +110,7 @@ export async function parseIncidentNote(text: string): Promise<{ signal: z.infer
       
       const { collections } = await import("../db/collections");
       const c = await collections();
-      const zoneExists = await c.zones.findOne({ code: signal.zoneCode });
+      const zoneExists = await c.zones.findOne({ code: signal.zoneCode, configured: true });
       if (!zoneExists) {
         throw new Error("INVALID_ZONE_CODE");
       }
@@ -129,7 +129,7 @@ export async function parseIncidentNote(text: string): Promise<{ signal: z.infer
   }
   const { collections } = await import("../db/collections");
   const c = await collections();
-  const zoneExists = await c.zones.findOne({ code: signal.zoneCode });
+  const zoneExists = await c.zones.findOne({ code: signal.zoneCode, configured: true });
   if (!zoneExists) {
     throw new Error("INVALID_ZONE_CODE");
   }

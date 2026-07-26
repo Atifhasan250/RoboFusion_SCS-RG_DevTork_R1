@@ -1,96 +1,57 @@
-/**
- * Integration tests: acknowledgment race condition
- * Tests that two simultaneous acknowledge requests result in exactly one success.
- *
- * Run: npx tsx tests/integration/acknowledge-race.ts
- */
 import "dotenv/config";
-
-const BASE_URL = process.env.TEST_BASE_URL ?? "http://localhost:3000";
-
-async function login(email: string, password: string): Promise<{ cookie: string; csrfToken: string }> {
-  const res = await fetch(`${BASE_URL}/api/v1/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-  const body = await res.json() as { csrfToken: string };
-  const setCookie = res.headers.get("set-cookie") ?? "";
-  const cookie = setCookie.split(";")[0];
-  return { cookie, csrfToken: body.csrfToken };
-}
-
-async function acknowledgeIncident(
-  incidentId: string,
-  auth: { cookie: string; csrfToken: string }
-): Promise<{ status: number; body: unknown }> {
-  const res = await fetch(`${BASE_URL}/api/v1/incidents/${incidentId}/acknowledge`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Cookie": auth.cookie,
-      "x-csrf-token": auth.csrfToken,
-    },
-    body: JSON.stringify({}),
-  });
-  return { status: res.status, body: await res.json() };
-}
-
-async function getOpenIncident(): Promise<string | null> {
-  const adminAuth = await login("admin@scs.local", process.env.DEMO_PASSWORD ?? "ChangeMe123!");
-  const res = await fetch(`${BASE_URL}/api/v1/incidents?status=OPEN`, {
-    headers: { "Cookie": adminAuth.cookie },
-  });
-  const body = await res.json() as { incidents: Array<{ id: string }> };
-  return body.incidents?.[0]?.id ?? null;
-}
+import { collections } from "../../src/server/db/collections";
+import { assertTestDatabase } from "../../src/server/db/test-safety";
+import { env } from "../../src/server/config/env";
+import { hashSecret } from "../../src/server/utils/id";
+import { ingest } from "../../src/server/services/ingestion-service";
+import { acknowledge } from "../../src/server/services/incident-service";
 
 async function main() {
-  console.log("Integration Test: Acknowledgment Race Condition");
-  console.log("─".repeat(60));
-
-  // Login as two different staff users simultaneously
-  const [auth1, auth2] = await Promise.all([
-    login("admin@scs.local", process.env.DEMO_PASSWORD ?? "ChangeMe123!"),
-    login("staff@scs.local", process.env.DEMO_PASSWORD ?? "ChangeMe123!"),
+  assertTestDatabase();
+  const c = await collections();
+  await Promise.all([
+    c.acknowledgments.deleteMany({}), c.incident_events.deleteMany({}), c.incidents.deleteMany({}),
+    c.actuator_commands.deleteMany({}), c.readings.deleteMany({}), c.zone_states.deleteMany({}),
+    c.zones.deleteMany({}), c.users.deleteMany({ id: { $in: ["race-user-a", "race-user-b"] } }),
   ]);
 
-  const incidentId = await getOpenIncident();
-  if (!incidentId) {
-    console.log("⚠ No open incident found. Trigger one by sending CRITICAL readings first.");
-    console.log("  Example: POST /api/v1/readings/IOT_LAB with fire=true + high gas");
-    process.exit(1);
-  }
-
-  console.log(`Testing with incident: ${incidentId}`);
-  console.log("Sending 2 simultaneous acknowledge requests...");
-
-  const [result1, result2] = await Promise.all([
-    acknowledgeIncident(incidentId, auth1),
-    acknowledgeIncident(incidentId, auth2),
+  const now = new Date();
+  await c.zones.insertOne({
+    id: "race-zone", code: "IOT_LAB", name: "IoT Lab", configured: true,
+    apiKeyHash: hashSecret("IOT_LAB-demo-key", env.ZONE_API_KEY_PEPPER),
+    state: "SAFE", riskScore: 0, primaryHazard: null, occupancy: false, cameraOccupancy: false,
+    connectivityState: "OFFLINE", lastReadingAt: null, lastSequence: null, commandVersion: 0,
+    createdAt: now, updatedAt: now,
+  });
+  await c.users.insertMany([
+    { id: "race-user-a", email: "race-a@scs.local", name: "Race A", passwordHash: "test-only", role: "ADMIN", active: true, createdAt: now },
+    { id: "race-user-b", email: "race-b@scs.local", name: "Race B", passwordHash: "test-only", role: "SECURITY_STAFF", active: true, createdAt: now },
   ]);
 
-  console.log(`Response 1: ${result1.status} — ${JSON.stringify(result1.body).slice(0, 80)}`);
-  console.log(`Response 2: ${result2.status} — ${JSON.stringify(result2.body).slice(0, 80)}`);
+  const payload = (sequence: number) => ({
+    bootId: "race-boot", sequence, timestamp: new Date(), fire: false, gas: 4095, water: 0, pir: true,
+    sensorHealth: "HEALTHY" as const,
+    sensorStatus: { fire: "ONLINE" as const, gas: "ONLINE" as const, water: "ONLINE" as const, pir: "ONLINE" as const },
+    deviceUptimeSeconds: 120, sampleIntervalMs: 200,
+  });
+  await ingest("IOT_LAB", "IOT_LAB-demo-key", payload(1));
+  await ingest("IOT_LAB", "IOT_LAB-demo-key", payload(2));
+  const incident = await c.incidents.findOne({ zoneId: "race-zone", active: true });
+  if (!incident) throw new Error("Could not create an open incident for the acknowledgment race test");
 
-  const successCount = [result1, result2].filter(r => r.status === 200).length;
-  const conflictCount = [result1, result2].filter(r => r.status === 409).length;
+  const outcomes = await Promise.allSettled([
+    acknowledge(incident.id, "race-user-a"),
+    acknowledge(incident.id, "race-user-b"),
+  ]);
+  const fulfilled = outcomes.filter(result => result.status === "fulfilled");
+  const rejected = outcomes.filter(result => result.status === "rejected");
+  const stored = await c.acknowledgments.find({ incidentId: incident.id }).toArray();
+  const finalIncident = await c.incidents.findOne({ id: incident.id });
 
-  console.log("─".repeat(60));
-
-  if (successCount === 1 && conflictCount === 1) {
-    console.log("✓ Race condition handled correctly: exactly 1 success, 1 conflict (409)");
-    process.exit(0);
-  } else if (successCount === 2) {
-    console.error("✗ FAIL: Both requests succeeded — race condition NOT prevented!");
-    process.exit(1);
-  } else if (successCount === 0) {
-    console.error("✗ FAIL: Neither request succeeded");
-    process.exit(1);
-  } else {
-    console.error(`✗ Unexpected: ${successCount} successes, ${conflictCount} conflicts`);
-    process.exit(1);
+  if (fulfilled.length !== 1 || rejected.length !== 1 || stored.length !== 1 || finalIncident?.status !== "ACKNOWLEDGED") {
+    throw new Error(`Race failure: fulfilled=${fulfilled.length}, rejected=${rejected.length}, stored=${stored.length}, status=${finalIncident?.status}`);
   }
+  console.log("✓ Acknowledgment race passed: exactly one winner, one conflict, one durable acknowledgment.");
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+main().then(() => process.exit(0)).catch(error => { console.error(error); process.exit(1); });

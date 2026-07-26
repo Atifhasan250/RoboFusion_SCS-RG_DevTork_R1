@@ -49,7 +49,7 @@ const migrations = [
         }),
         d.collection("incidents").createIndex({ status: 1, startedAt: -1 }),
         d.collection("incidents").createIndex({ zoneId: 1, startedAt: -1 }),
-        // PDF Section 26: Critical incident query index
+        // PDF Test Case 19: Critical incident query index
         d.collection("incidents").createIndex({ severity: 1, startedAt: -1 }),
         // incident_events
         d.collection("incident_events").createIndex({ incidentId: 1, occurredAt: 1 }),
@@ -197,6 +197,76 @@ const migrations = [
     run: async () => {
       const d = await db();
       await d.collection("zones").createIndex({ commandVersion: 1 });
+    }
+  },
+
+  // ── 006: Five-zone / replay / NLP ranking support ──────────────────────────
+  {
+    id: "006-five-zone-integrity-and-advisory-indexes",
+    run: async () => {
+      const d = await db();
+      await Promise.all([
+        d.collection("schema_migrations").createIndex({ id: 1 }, { unique: true }),
+        d.collection("natural_language_reports").createIndex({ linkedIncidentId: 1, createdAt: -1 }),
+        d.collection("natural_language_reports").createIndex({ parsedZoneCode: 1, parsedHazard: 1, createdAt: -1 }),
+        d.collection("readings").createIndex({ replayed: 1, receivedAt: -1 }),
+        d.collection("zones").createIndex({ configured: 1, connectivityState: 1 }),
+      ]);
+
+      await d.command({
+        collMod: "sensors",
+        validator: {
+          $jsonSchema: {
+            bsonType: "object",
+            required: [
+              "id", "zoneId", "sensorType", "rawMin", "rawMax", "baselineRaw", "criticalRaw",
+              "direction", "warmupSeconds", "debounceCount", "isRequired", "isEnabled", "status",
+              "lastSeenAt", "createdAt", "updatedAt"
+            ],
+            properties: {
+              id: { bsonType: "string" },
+              zoneId: { bsonType: "string" },
+              sensorType: { enum: ["FIRE", "GAS", "WATER", "PIR", "CAMERA"] },
+              status: { enum: ["ONLINE", "OFFLINE", "DEGRADED", "WARMING_UP", "NOT_CONFIGURED"] },
+              isRequired: { bsonType: "bool" },
+              isEnabled: { bsonType: "bool" },
+              lastSeenAt: { bsonType: ["date", "null"] },
+            }
+          }
+        },
+        validationLevel: "strict",
+        validationAction: "error",
+      });
+    }
+  },
+
+  // ── 007: Tighten reading advisory fields without breaking old rows ─────────
+  {
+    id: "007-reading-replay-validator",
+    run: async () => {
+      const d = await db();
+      await d.command({
+        collMod: "readings",
+        validator: {
+          $jsonSchema: {
+            bsonType: "object",
+            required: ["id", "zoneId", "bootId", "sequence", "observedAt", "riskScore"],
+            properties: {
+              id: { bsonType: "string" },
+              zoneId: { bsonType: "string" },
+              bootId: { bsonType: "string" },
+              sequence: { bsonType: ["int", "long", "double"] },
+              observedAt: { bsonType: "date" },
+              riskScore: { bsonType: ["double", "int", "long"] },
+              replayed: { bsonType: "bool" },
+              replayBatchLast: { bsonType: "bool" },
+              sensorHealth: { enum: ["HEALTHY", "DEGRADED", "OFFLINE"] },
+            }
+          }
+        },
+        validationLevel: "moderate",
+        validationAction: "error",
+      });
     }
   }
 ];

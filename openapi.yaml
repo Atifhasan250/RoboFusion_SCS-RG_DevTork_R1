@@ -87,7 +87,7 @@ components:
       type: object
       properties:
         command_id: { type: string }
-        state_version: { type: integer }
+        command_version: { type: integer }
         safety_state: { $ref: "#/components/schemas/SafetyState" }
         led: { type: string, enum: [GREEN, YELLOW, RED, BLUE, OFF] }
         buzzer: { type: boolean }
@@ -141,7 +141,7 @@ paths:
       summary: Invalidate session
       tags: [Auth]
       responses:
-        "200": { description: Logged out }
+        "204": { description: Logged out }
 
   /api/v1/auth/me:
     get:
@@ -181,8 +181,19 @@ paths:
                 water: { type: number, minimum: 0, maximum: 100 }
                 pir: { type: boolean }
                 cameraOccupancy: { type: boolean, nullable: true }
+                sensorStatus:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    fire: { type: string, enum: [ONLINE, OFFLINE, DEGRADED, WARMING_UP, NOT_CONFIGURED] }
+                    gas: { type: string, enum: [ONLINE, OFFLINE, DEGRADED, WARMING_UP, NOT_CONFIGURED] }
+                    water: { type: string, enum: [ONLINE, OFFLINE, DEGRADED, WARMING_UP, NOT_CONFIGURED] }
+                    pir: { type: string, enum: [ONLINE, OFFLINE, DEGRADED, WARMING_UP, NOT_CONFIGURED] }
                 sensorHealth: { type: string, enum: [HEALTHY, DEGRADED, OFFLINE] }
                 deviceUptimeSeconds: { type: number, minimum: 0 }
+                sampleIntervalMs: { type: integer, minimum: 100, maximum: 60000, default: 500 }
+                replayed: { type: boolean, default: false }
+                replayBatchLast: { type: boolean, default: false }
             example:
               bootId: boot-a8f3c1
               sequence: 1052
@@ -191,8 +202,12 @@ paths:
               gas: 3120
               water: 20
               pir: true
+              sensorStatus: { fire: ONLINE, gas: ONLINE, water: ONLINE, pir: ONLINE }
               sensorHealth: HEALTHY
               deviceUptimeSeconds: 120
+              sampleIntervalMs: 200
+              replayed: false
+              replayBatchLast: false
       responses:
         "201":
           description: Reading accepted
@@ -279,10 +294,16 @@ paths:
       parameters:
         - in: query
           name: status
-          schema: { $ref: "#/components/schemas/IncidentStatus" }
+          schema: { type: string, enum: [active, all, resolved, OPEN, ACKNOWLEDGED, RESOLVED] }
         - in: query
           name: zoneId
           schema: { type: string }
+        - in: query
+          name: zoneCode
+          schema: { type: string }
+        - in: query
+          name: hazard
+          schema: { $ref: "#/components/schemas/HazardType" }
         - in: query
           name: from
           schema: { type: string, format: date-time }
@@ -429,7 +450,7 @@ paths:
                   trend:
                     type: object
                     properties:
-                      status: { type: string, enum: [RISING, FALLING, STABLE, INSUFFICIENT_DATA] }
+                      status: { type: string, enum: [RISING, FALLING, STABLE, TRENDING_TOWARD_CRITICAL, INSUFFICIENT_DATA] }
                       slope: { type: number }
                       window: { type: integer }
                   advisory: { type: string }
@@ -438,6 +459,11 @@ paths:
     get:
       summary: Advisory ML predicted risk probability (Bonus 3)
       tags: [Bonus]
+      parameters:
+        - in: path
+          name: zoneCode
+          required: true
+          schema: { type: string }
       responses:
         "200":
           description: ML prediction (advisory only, never actuates hardware)
@@ -565,7 +591,7 @@ paths:
 
   /api/v1/system/ready:
     get:
-      summary: Readiness check (DB connection)
+      summary: Readiness check (MongoDB Atlas connection and ML model)
       security: []
       tags: [System]
       responses:

@@ -1,6 +1,6 @@
 /**
  * explain-indexes.ts — Generate explain("executionStats") evidence
- * for the two most important queries (PDF Test Case 26).
+ * for the two most important queries (PDF Test Case 19).
  *
  * Output is printed as JSON and can be saved for demo evidence.
  * Run: npm run db:indexes:explain > docs/evidence/index-explain.json
@@ -13,7 +13,7 @@ async function main() {
   const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const evidence: Record<string, unknown> = {};
 
-  // ── PDF Test Case 26, Query 1: Critical incidents in last 24 hours ────────
+  // ── PDF Test Case 19, Query 1: Critical incidents in last 24 hours ────────
   const incidentExplain = await d
     .collection("incidents")
     .find({ severity: "CRITICAL", startedAt: { $gte: last24Hours } })

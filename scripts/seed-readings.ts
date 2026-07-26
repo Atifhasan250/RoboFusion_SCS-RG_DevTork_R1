@@ -11,6 +11,7 @@ async function main() {
   const docs: Omit<Reading, "_id">[] = [];
   const batchSize = 500;
   const total = 10_000;
+  const seedBootId = `performance-seed-${Date.now()}`;
 
   for (let i = 0; i < total; i++) {
     const zone = zones[i % zones.length];
@@ -26,7 +27,7 @@ async function main() {
     docs.push({
       id: id(),
       zoneId: zone.id,
-      bootId: "seed-boot-001",
+      bootId: seedBootId,
       sequence: 1_000_000 + i,
       receivedAt: at,
       observedAt: at,
@@ -48,17 +49,19 @@ async function main() {
       primaryHazard: gasFactor > 0.3 ? "GAS" : waterFactor > 0.2 ? "FLOOD" : "NONE",
       isLate: false,
       isWarmingUp: false,
+      replayed: false,
+      replayBatchLast: false,
       normalized: { gas: gasFactor, water: waterFactor, occupancy: occupancy ? 1 : 0 },
     });
 
     if (docs.length === batchSize) {
-      await c.readings.insertMany(docs, { ordered: false }).catch(() => {});
+      await c.readings.insertMany(docs, { ordered: false });
       docs.length = 0;
       process.stdout.write(`\r  Seeded ${i + 1}/${total}...`);
     }
   }
   if (docs.length > 0) {
-    await c.readings.insertMany(docs, { ordered: false }).catch(() => {});
+    await c.readings.insertMany(docs, { ordered: false });
   }
 
   console.log(`\nSeeding representative incidents for performance tests...`);
@@ -103,12 +106,12 @@ async function main() {
       actorUserId: null, description: "Incident resolved", metadata: {}, occurredAt: resolvedAt,
     });
   }
-  await c.incidents.insertMany(incidents, { ordered: false }).catch(() => {});
-  await c.incident_events.insertMany(events, { ordered: false }).catch(() => {});
+  await c.incidents.insertMany(incidents, { ordered: false });
+  await c.incident_events.insertMany(events, { ordered: false });
 
   const count = await c.readings.countDocuments();
   const incCount = await c.incidents.countDocuments();
   console.log(`Seeded. Total readings: ${count}, incidents: ${incCount}`);
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });

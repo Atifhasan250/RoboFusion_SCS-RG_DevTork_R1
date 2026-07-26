@@ -1,39 +1,81 @@
-# Database Schema — SCS-RG
+# MongoDB Atlas Schema — SCS-RG
 
-## Collections Overview
+MongoDB Atlas is the official database path. Transactions require an Atlas replica-set deployment, which Atlas provides.
 
-| Collection | Purpose | Key Index |
+## Collections
+
+| Collection | Purpose | Key integrity/index rule |
 |---|---|---|
-| `zones` | Zone identity and config | `code` unique |
-| `zone_states` | Durable live state (authoritative) | `zoneId` unique |
-| `sensors` | Sensor calibration per zone | `(zoneId, sensorType)` unique |
-| `readings` | Raw sensor readings (90-day TTL) | `(zoneId, bootId, sequence)` unique |
-| `incidents` | Incident lifecycle | `(zoneId, active:true)` partial unique |
-| `incident_events` | Event timeline per incident | `(incidentId, occurredAt)` |
-| `acknowledgments` | One per incident, race-safe | `incidentId` unique |
-| `actuator_commands` | Persisted commands per state version | `(zoneId, commandVersion)` unique |
-| `manual_overrides` | Admin override records | `(zoneId, active)` |
-| `predictions` | ML/AI advisory predictions | `(zoneId, predictedAt)` |
-| `natural_language_reports` | NLP incident reports | `(userId, createdAt)` |
-| `users` | User accounts | `email` unique |
-| `sessions` | HttpOnly session tokens | `expiresAt` TTL |
-| `audits` | Audit log | `(zoneId, createdAt)` |
-| `schema_migrations` | Migration tracking | `id` unique |
+| `zones` | Five official zone identities and fast current-state snapshot | `code` unique |
+| `zone_states` | Authoritative durable live state | `zoneId` unique |
+| `sensors` | Four calibrated required sensors per zone | `(zoneId, sensorType)` unique |
+| `readings` | Raw + normalized/computed reading history | `(zoneId, bootId, sequence)` unique; 90-day TTL |
+| `incidents` | Open/acknowledged/resolved lifecycle | one `active=true` incident per zone |
+| `incident_events` | Ordered full timeline | `(incidentId, occurredAt)` |
+| `acknowledgments` | First successful acknowledgment | `incidentId` unique |
+| `actuator_commands` | Durable versioned node commands | `(zoneId, commandVersion)` unique |
+| `manual_overrides` | Audited Admin actions | `(zoneId, active)` |
+| `users` | Admin and Security Staff accounts/roles | `email` unique |
+| `sessions` | HttpOnly login sessions + CSRF token | `expiresAt` TTL |
+| `predictions` | Advisory ML output | `(zoneId, predictedAt)`; 90-day TTL |
+| `natural_language_reports` | Validated structured advisory reports | incident/zone/hazard/time indexes |
+| `audits` | Security and action audit records | time and zone indexes |
+| `schema_migrations` | Idempotent migration history | `id` unique |
 
-## MongoDB Integrity Strategy
+## Relationships
 
-MongoDB does not have cross-collection foreign keys. Integrity is enforced by:
+```mermaid
+erDiagram
+  ZONES ||--|| ZONE_STATES : has
+  ZONES ||--o{ SENSORS : contains
+  ZONES ||--o{ READINGS : reports
+  ZONES ||--o{ INCIDENTS : generates
+  INCIDENTS ||--o{ INCIDENT_EVENTS : contains
+  INCIDENTS ||--o| ACKNOWLEDGMENTS : receives
+  USERS ||--o{ ACKNOWLEDGMENTS : makes
+  ZONES ||--o{ ACTUATOR_COMMANDS : receives
+  ZONES ||--o{ MANUAL_OVERRIDES : receives
+  USERS ||--o{ MANUAL_OVERRIDES : issues
+  INCIDENTS ||--o{ NATURAL_LANGUAGE_REPORTS : may_link
+```
 
-1. **JSON Schema Validators** — `readings` and `incidents` collections have strict validators.
-2. **Unique Indexes** — prevent duplicate readings, sessions, acknowledgments.
-3. **Partial Unique Index** — `{zoneId: 1, active: 1}` with `partialFilterExpression: {active: true}` enforces one active incident per zone.
-4. **Multi-document Transactions** — reading + zone_state + incident + command written atomically.
-5. **Application-level Reference Checks** — service layer verifies referenced IDs exist before writing.
-6. **Integrity Check Script** — `npm run db:integrity:check` verifies zero orphan documents.
+MongoDB does not enforce cross-collection foreign keys. The solution provides equivalent safety through:
 
-## Key Collections
+1. Service-layer reference checks
+2. JSON Schema validators
+3. Unique and partial unique indexes
+4. Multi-document transactions
+5. Archive instead of unsafe zone deletion
+6. `npm run db:integrity:check`
 
-### `zone_states` — Authoritative live state
+## Five-zone seed invariant
+
+`npm run db:seed` creates or repairs:
+
+```text
+IOT_LAB
+ROBOTICS_LAB
+SERVER_ROOM
+DATA_SCIENCE_LAB
+SOFTWARE_LAB
+```
+
+Each has exactly the required enabled sensor types:
+
+```text
+FIRE
+GAS
+WATER
+PIR
+```
+
+Run:
+
+```bash
+npm run db:seed:verify
+```
+
+## Authoritative state example
 
 ```json
 {
@@ -41,69 +83,105 @@ MongoDB does not have cross-collection foreign keys. Integrity is enforced by:
   "safetyState": "CRITICAL",
   "connectivityState": "ONLINE",
   "riskScore": 88.5,
-  "riskComponents": { "fire": 70, "gas": 8.5, "water": 0, "occupancy": 10 },
+  "riskComponents": {
+    "fire": 70,
+    "gas": 8.5,
+    "water": 0,
+    "occupancy": 10
+  },
   "primaryHazard": "FIRE",
   "occupied": true,
+  "lastReadingId": "uuid",
+  "lastObservedAt": "2026-07-25T08:20:45Z",
   "criticalSince": "2026-07-25T08:20:10Z",
-  "consecutiveCriticalReadings": 5,
   "fireConfirmed": true,
-  "commandVersion": 42,
+  "stateVersion": 42,
   "updatedAt": "2026-07-25T08:20:45Z"
 }
 ```
 
-### `incidents` — Active incident
+## Late and replayed data
+
+A reading with an observation time earlier than `zone_states.lastObservedAt` is stored with `isLate=true`. It does not update:
+
+- current safety/connectivity state
+- risk score
+- occupancy
+- incident lifecycle
+- actuator command
+
+Firmware replay fields:
 
 ```json
 {
-  "id": "uuid",
-  "zoneId": "uuid",
-  "status": "OPEN",
-  "active": true,
-  "severity": "CRITICAL",
-  "primaryHazard": "FIRE",
-  "initialRiskScore": 70,
-  "peakRiskScore": 88.5,
-  "startedAt": "2026-07-25T08:20:10Z",
-  "acknowledgedAt": null,
-  "resolvedAt": null,
-  "version": 1
+  "replayed": true,
+  "replayBatchLast": false
 }
 ```
 
-### `actuator_commands` — Persisted command
+The final cached item has `replayBatchLast=true` and generates a sync-complete event.
 
-```json
-{
-  "id": "uuid",
-  "zoneId": "uuid",
-  "incidentId": "uuid",
-  "commandVersion": 42,
-  "safetyState": "CRITICAL",
-  "led": "RED",
-  "buzzer": true,
-  "relayCutoff": true,
-  "commandSource": "SENSOR_STATE",
-  "createdAt": "2026-07-25T08:20:45Z",
-  "acknowledgedAt": null,
-  "appliedAt": null
-}
+## Concurrency and integrity
+
+- Ten or more concurrent writes across different zones are transaction-safe.
+- Same-zone concurrent state writes use `stateVersion` compare-and-retry.
+- Duplicate network retries are idempotent.
+- Concurrent acknowledgment produces one winner and one conflict.
+- Concurrent sensor and override commands receive distinct atomic versions.
+- A zone with an active incident is not deletable; it is archived only when allowed.
+
+## Query-performance indexes
+
+Critical incidents in the last 24 hours:
+
+```js
+{ severity: 1, startedAt: -1 }
 ```
 
-## Data Retention Policy
+Reading history for a zone:
 
-| Data | Retention |
-|---|---|
-| Raw readings | 90 days (TTL index on `observedAt`) |
-| Incidents | Minimum 1 year (no TTL) |
-| Audit logs | Minimum 1 year (no TTL) |
-| Predictions | 90 days (TTL index on `predictedAt`) |
-| Sessions | 8 hours (TTL index on `expiresAt`) |
+```js
+{ zoneId: 1, observedAt: -1 }
+```
 
-## Backup Strategy
+Generate evidence:
 
-- Daily `mongodump --gzip` to separate storage
-- Last 7 daily backups retained
-- Manual backup before each demo
-- Restore: `mongorestore --gzip --drop`, then `npm run db:integrity:check`
-- Atlas automated daily backup with point-in-time recovery recommended for production
+```bash
+npm run db:seed:readings
+npm run db:indexes:explain > index-explain.json
+```
+
+## Retention and access
+
+| Data | Retention | Access |
+|---|---:|---|
+| Raw readings | 90 days | Admin only through raw-reading API |
+| Predictions | 90 days | Authenticated advisory endpoint |
+| Incidents/events | At least 1 year | Staff and Admin summaries/timeline |
+| Audit logs | At least 1 year | Administrative/internal review |
+| Sessions | 8 hours | Current authenticated user only |
+
+## Backup and recovery
+
+Backup:
+
+```bash
+npm run db:backup
+```
+
+This invokes `mongodump --gzip` using the URI and DB from `.env`.
+
+Safe recovery test:
+
+```bash
+RESTORE_TARGET_DB=robofusion_restore_test npm run db:restore -- backups/<archive>.archive.gz
+```
+
+Restore to the main/demo DB is deliberately blocked. After restoration, point a test environment at the restored database and run:
+
+```bash
+npm run db:integrity:check
+npm run db:seed:verify
+```
+
+A daily backup leaves a maximum potential gap equal to the backup interval; Atlas point-in-time recovery is recommended when the selected Atlas plan supports it.

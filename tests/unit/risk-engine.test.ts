@@ -11,7 +11,7 @@ import {
 
 // ── PDF Section 13: Risk Formula ───────────────────────────────────────────────
 describe("Risk Formula (PDF Section 13)", () => {
-  it("uses PDF weights: fire=70, gas=70, water=70, occupancy=10", () => {
+  it("uses the documented project weights: fire=70, gas=70, water=70, occupancy=10", () => {
     expect(RISK_WEIGHTS.fire).toBe(70);
     expect(RISK_WEIGHTS.gas).toBe(70);
     expect(RISK_WEIGHTS.water).toBe(70);
@@ -70,8 +70,8 @@ describe("State Thresholds (PDF Section 13)", () => {
   it("score = 100 → CRITICAL", () => expect(stateForRisk(100)).toBe("CRITICAL"));
 });
 
-// ── PDF Section 15: State Hysteresis ─────────────────────────────────────────
-describe("State Hysteresis (PDF Section 15)", () => {
+// ── PDF recovery/hysteresis requirements: State Hysteresis ─────────────────────────────────────────
+describe("State Hysteresis (PDF recovery/hysteresis requirements)", () => {
   it("SAFE + risk>=30 but only 1 reading → stays SAFE", () => {
     const result = applyHysteresis({
       currentState: "SAFE", newRiskScore: 35,
@@ -127,8 +127,8 @@ describe("State Hysteresis (PDF Section 15)", () => {
   });
 });
 
-// ── PDF Section 18: Priority Score ───────────────────────────────────────────
-describe("Priority Score (PDF Section 18)", () => {
+// ── PDF Test Case 12: Priority Score ───────────────────────────────────────────
+describe("Priority Score (PDF Test Case 12)", () => {
   it("base = riskScore, no occupancy, fresh incident", () => {
     const criticalSince = new Date();
     const score = priorityScore(75, false, criticalSince);

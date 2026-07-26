@@ -75,7 +75,7 @@ export function calculateRisk(input: RiskInput): RiskResult {
   };
 }
 
-// ── Priority Score (PDF Section 18) ──────────────────────────────────────────
+// ── Priority Score (PDF Test Case 12) ──────────────────────────────────────────
 // priority = riskScore + occupancyBonus(10) + durationBonus(min 10, seconds/30)
 export function priorityScore(
   riskScore: number,
@@ -113,12 +113,12 @@ export function rankingReason(params: {
   if (hazard !== "NONE" && hazard !== "OCCUPANCY") reasons.push(`active ${hazard.toLowerCase()} hazard`);
   if (occupied) reasons.push("confirmed occupancy");
   if (durationBonus > 0) reasons.push(`sustained critical for ${durationText}`);
-  if (hasNlpBonus) reasons.push(`recent HIGH severity NLP report`);
+  if (hasNlpBonus) reasons.push(`recent validated matching incident report`);
   if (reasons.length) parts.push(`because it has ${reasons.join(", ")}.`);
   return parts.join(" ");
 }
 
-// ── Hysteresis State Transition (PDF Section 15) ──────────────────────────────
+// ── Hysteresis State Transition (PDF recovery/hysteresis requirements) ──────────────────────────────
 // ENTER WARNING:  risk >= 30 AND >= 2 consecutive valid readings
 // ENTER CRITICAL: risk >= 65 AND >= 2 consecutive valid readings
 //                 (fire debounce complete allows immediate critical)

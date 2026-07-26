@@ -1,121 +1,80 @@
 /**
- * Concurrency test: 10 simultaneous sensor writes to different zones.
- * Verifies no reading is lost, no duplicate state mutation occurs,
- * and the zone states remain consistent.
- *
- * Run: npx tsx tests/concurrency/concurrent-writes.ts
- *      (requires MongoDB replica set to be running)
+ * Ten simultaneous transactional writes across the five official zones.
+ * Uses .env.test through scripts/run-with-test-env.mjs and never calls the main/demo server.
  */
 import "dotenv/config";
 import { collections } from "../../src/server/db/collections";
+import { assertTestDatabase } from "../../src/server/db/test-safety";
+import { env } from "../../src/server/config/env";
+import { hashSecret } from "../../src/server/utils/id";
+import { ingest } from "../../src/server/services/ingestion-service";
 
-const BASE_URL = process.env.TEST_BASE_URL ?? "http://localhost:3000";
+const ZONES = ["IOT_LAB", "ROBOTICS_LAB", "SERVER_ROOM", "DATA_SCIENCE_LAB", "SOFTWARE_LAB"] as const;
 
-interface WriteResult {
-  zone: string;
-  sequence: number;
-  accepted: boolean;
-  status: number;
-  riskScore?: number;
-  error?: string;
-}
-
-async function sendReading(zone: string, sequence: number): Promise<WriteResult> {
-  try {
-    const res = await fetch(`${BASE_URL}/api/v1/readings/${zone}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-zone-api-key": `${zone}-demo-key`,
-      },
-      body: JSON.stringify({
-        bootId: "concurrency-test-boot",
-        sequence,
-        timestamp: new Date().toISOString(),
-        fire: sequence % 7 === 0, // occasional fire
-        gas: Math.floor(Math.random() * 300) + 1200,
-        water: Math.floor(Math.random() * 40),
-        pir: sequence % 3 === 0,
-        sensorHealth: "HEALTHY",
-        deviceUptimeSeconds: 120,
-        sampleIntervalMs: 500,
-      }),
-    });
-    const body = await res.json() as { accepted?: boolean; duplicate?: boolean; zone?: { risk_score?: number } };
-    return {
-      zone, sequence,
-      accepted: body.accepted ?? false,
-      status: res.status,
-      riskScore: body.zone?.risk_score,
-    };
-  } catch (error) {
-    return { zone, sequence, accepted: false, status: 0, error: String(error) };
-  }
+async function prepare() {
+  assertTestDatabase();
+  const c = await collections();
+  await Promise.all([
+    c.zones.deleteMany({}), c.zone_states.deleteMany({}), c.readings.deleteMany({}),
+    c.incidents.deleteMany({}), c.incident_events.deleteMany({}), c.actuator_commands.deleteMany({}),
+    c.acknowledgments.deleteMany({}), c.manual_overrides.deleteMany({}),
+  ]);
+  const now = new Date();
+  await c.zones.insertMany(ZONES.map(code => ({
+    id: `concurrency-${code}`,
+    code,
+    name: code.replaceAll("_", " "),
+    configured: true,
+    apiKeyHash: hashSecret(`${code}-demo-key`, env.ZONE_API_KEY_PEPPER),
+    state: "SAFE" as const,
+    riskScore: 0,
+    primaryHazard: null,
+    occupancy: false,
+    cameraOccupancy: false,
+    connectivityState: "OFFLINE" as const,
+    lastReadingAt: null,
+    lastSequence: null,
+    commandVersion: 0,
+    createdAt: now,
+    updatedAt: now,
+  })));
 }
 
 async function main() {
-  const ZONES = ["IOT_LAB", "ROBOTICS_LAB", "SERVER_ROOM"];
-  const BASE_SEQ = Math.floor(Date.now() / 1000) % 100_000; // unique per run
-
-  console.log(`Concurrency Test — 10 simultaneous writes to ${ZONES.length} zones`);
-  console.log(`Base URL: ${BASE_URL}`);
-  console.log("─".repeat(60));
-
-  // 10 concurrent writes: mix of zones
-  const writes = Array.from({ length: 10 }, (_, i) => ({
-    zone: ZONES[i % ZONES.length],
-    sequence: BASE_SEQ + i,
-  }));
-
-  const start = Date.now();
-  const results = await Promise.all(writes.map(({ zone, sequence }) => sendReading(zone, sequence)));
-  const elapsed = Date.now() - start;
-
-  let passed = 0, failed = 0;
-  for (const r of results) {
-    const ok = r.status === 201 || r.status === 200;
-    if (ok) passed++;
-    else failed++;
-    const statusStr = ok ? "✓" : "✗";
-    console.log(`${statusStr} ${r.zone.padEnd(20)} seq=${r.sequence} status=${r.status} risk=${r.riskScore ?? "?"}`);
-  }
-
-  console.log("─".repeat(60));
-  console.log(`Results: ${passed} accepted, ${failed} failed — ${elapsed}ms total`);
-
-  // Verify DB state
+  await prepare();
   const c = await collections();
-  const recentReadings = await c.readings.find({
-    bootId: "concurrency-test-boot",
-    sequence: { $gte: BASE_SEQ, $lte: BASE_SEQ + 9 },
-  }).toArray();
+  const writes = Array.from({ length: 10 }, (_, index) => {
+    const zoneCode = ZONES[index % ZONES.length];
+    return ingest(zoneCode, `${zoneCode}-demo-key`, {
+      bootId: "concurrency-test-boot",
+      sequence: index + 1,
+      timestamp: new Date(),
+      fire: false,
+      gas: index % 4 === 0 ? 3200 : 1200 + index * 10,
+      water: index % 6 === 0 ? 85 : 0,
+      pir: index % 3 === 0,
+      sensorHealth: "HEALTHY",
+      sensorStatus: { fire: "ONLINE", gas: "ONLINE", water: "ONLINE", pir: "ONLINE" },
+      deviceUptimeSeconds: 120,
+      sampleIntervalMs: 200,
+    });
+  });
 
-  console.log(`\nDB Verification: ${recentReadings.length}/${writes.length} readings persisted`);
-
-  // Check for duplicate active incidents
-  const dupCheck = await c.incidents.aggregate([
+  const started = Date.now();
+  const outcomes = await Promise.allSettled(writes);
+  const elapsed = Date.now() - started;
+  const failures = outcomes.filter(outcome => outcome.status === "rejected");
+  const stored = await c.readings.countDocuments({ bootId: "concurrency-test-boot" });
+  const duplicateActive = await c.incidents.aggregate([
     { $match: { active: true } },
     { $group: { _id: "$zoneId", count: { $sum: 1 } } },
     { $match: { count: { $gt: 1 } } },
   ]).toArray();
 
-  if (dupCheck.length === 0) {
-    console.log("✓ No duplicate active incidents (one-per-zone constraint maintained)");
-  } else {
-    console.error(`✗ VIOLATION: ${dupCheck.length} zones have multiple active incidents!`);
+  if (failures.length || stored !== 10 || duplicateActive.length) {
+    throw new Error(`Concurrency failure: rejected=${failures.length}, stored=${stored}, duplicate-active=${duplicateActive.length}`);
   }
-
-  if (failed > 0) {
-    console.error(`\nTest FAILED: ${failed} writes were rejected`);
-    process.exit(1);
-  }
-  if (recentReadings.length < writes.length) {
-    console.error(`\nTest FAILED: only ${recentReadings.length}/${writes.length} readings persisted`);
-    process.exit(1);
-  }
-
-  console.log("\n✓ Concurrency test PASSED");
-  process.exit(0);
+  console.log(`✓ Ten simultaneous writes committed in ${elapsed} ms with no data loss or duplicate active incidents.`);
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+main().then(() => process.exit(0)).catch(error => { console.error(error); process.exit(1); });

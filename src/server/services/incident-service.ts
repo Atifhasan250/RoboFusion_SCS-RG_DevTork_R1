@@ -6,7 +6,7 @@ import { realtime } from "../realtime/hub";
 import type { Incident, HazardType } from "../types";
 
 // ── Acknowledge (fully transactional, race-safe) ──────────────────────────────
-export async function acknowledge(incidentId: string, userId: string) {
+export async function acknowledge(incidentId: string, userId: string): Promise<Incident> {
   const c = await collections();
   const client = await mongoClient();
   const session = client.startSession();
@@ -62,22 +62,27 @@ export async function acknowledge(incidentId: string, userId: string) {
     await session.endSession();
   }
 
+  const committed = result as Incident | null;
+  if (!committed) {
+    throw Object.assign(new Error("Acknowledgment did not commit"), { httpStatus: 409, code: "CONFLICT" });
+  }
+
   // Broadcast after commit
   realtime.emit("INCIDENT_ACKNOWLEDGED", {
     event_id: id(),
     event_type: "INCIDENT_ACKNOWLEDGED",
     occurred_at: new Date().toISOString(),
-    data: { incident: result },
-    version: result ? (result as Incident).version ?? 1 : 1,
+    data: { incident: committed },
+    version: committed.version ?? 1,
   });
   realtime.emit("PRIORITY_QUEUE_UPDATED", {
     event_id: id(), event_type: "PRIORITY_QUEUE_UPDATED", occurred_at: new Date().toISOString(), data: {}, version: 0,
   });
 
-  return result;
+  return committed;
 }
 
-// ── Priority Queue with ranking reason ───────────────────────────────────────
+// ── Priority Queue with deterministic ranking reason ─────────────────────────
 export async function priorityQueue() {
   const c = await collections();
   const raw = await c.incidents
@@ -85,29 +90,50 @@ export async function priorityQueue() {
       { $match: { active: true, status: { $in: ["OPEN", "ACKNOWLEDGED"] } } },
       { $lookup: { from: "zones", localField: "zoneId", foreignField: "id", as: "zone" } },
       { $unwind: "$zone" },
+      { $match: { "zone.configured": true } },
       { $lookup: { from: "zone_states", localField: "zoneId", foreignField: "zoneId", as: "zoneState" } },
-      { $unwind: { path: "$zoneState", preserveNullAndEmptyArrays: true } },
-      { $lookup: { from: "natural_language_reports", localField: "zone.code", foreignField: "parsedZoneCode", as: "nlpReports" } },
+      { $unwind: "$zoneState" },
+      // Incidents remain active through WARNING, but only currently CRITICAL zones belong in the response queue.
+      { $match: { "zoneState.safetyState": "CRITICAL" } },
+      {
+        $lookup: {
+          from: "natural_language_reports",
+          let: { incidentId: "$id", zoneCode: "$zone.code", hazard: "$primaryHazard" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$validationStatus", "ACCEPTED"] },
+                    { $eq: ["$linkedIncidentId", "$$incidentId"] },
+                    { $eq: ["$parsedZoneCode", "$$zoneCode"] },
+                    { $eq: ["$parsedHazard", "$$hazard"] },
+                    { $gte: ["$createdAt", new Date(Date.now() - 10 * 60 * 1000)] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: "nlpReports",
+        },
+      },
     ])
-    .toArray() as Array<Incident & { zone: { name: string; code: string; occupancy: boolean }; zoneState?: { criticalSince: Date | null; riskScore: number }; nlpReports?: Array<{ estimatedSeverity: string; createdAt: Date; validationStatus: string }> }>;
+    .toArray() as Array<Incident & {
+      zone: { name: string; code: string; occupancy: boolean };
+      zoneState: { criticalSince: Date | null; riskScore: number; occupied: boolean };
+      nlpReports: Array<{ rankingBoost?: number }>;
+    }>;
 
   const ranked = raw
-    .map((inc) => {
-      const criticalSince = inc.zoneState?.criticalSince ?? inc.startedAt ?? inc.openedAt ?? new Date();
-      const occupied = inc.zone.occupancy;
-      const baseRiskScore = inc.zoneState?.riskScore ?? inc.riskScore ?? 0;
-      
-      // Calculate NLP Bonus
-      const hasRecentHighSeverityNlp = inc.nlpReports?.some(
-        r => r.estimatedSeverity === "HIGH" && r.validationStatus === "ACCEPTED" && (Date.now() - new Date(r.createdAt).getTime() < 24 * 60 * 60 * 1000)
-      );
-      const riskScore = baseRiskScore;
-      
-      const pScore = priorityScore(riskScore, occupied, criticalSince) + (hasRecentHighSeverityNlp ? 15 : 0);
+    .map((incident) => {
+      const criticalSince = incident.zoneState.criticalSince ?? incident.startedAt ?? incident.openedAt ?? new Date();
+      const occupied = incident.zoneState.occupied ?? incident.zone.occupancy;
+      const riskScore = incident.zoneState.riskScore ?? incident.riskScore ?? 0;
+      const nlpBonus = Math.min(7, Math.max(0, ...incident.nlpReports.map(report => report.rankingBoost ?? 0)));
+      const pScore = priorityScore(riskScore, occupied, criticalSince) + nlpBonus;
       const durationSecs = Math.max(0, (Date.now() - new Date(criticalSince).getTime()) / 1000);
       const durationBonus = Math.min(10, durationSecs / 30);
-      
-      return { inc, pScore, riskScore, occupied, criticalSince, durationBonus, hasNlpBonus: hasRecentHighSeverityNlp };
+      return { incident, pScore, riskScore, occupied, criticalSince, durationBonus, nlpBonus };
     })
     .sort((a, b) => {
       if (b.pScore !== a.pScore) return b.pScore - a.pScore;
@@ -115,32 +141,33 @@ export async function priorityQueue() {
       if (a.occupied !== b.occupied) return a.occupied ? -1 : 1;
       const timeDiff = new Date(a.criticalSince).getTime() - new Date(b.criticalSince).getTime();
       if (timeDiff !== 0) return timeDiff;
-      return a.inc.zone.code.localeCompare(b.inc.zone.code);
+      return a.incident.zone.code.localeCompare(b.incident.zone.code);
     });
 
-  return ranked.map(({ inc, pScore, riskScore, occupied, criticalSince, durationBonus, hasNlpBonus }, idx) => ({
-    rank: idx + 1,
-    incident_id: inc.id,
-    zone_id: inc.zoneId,
-    zone_code: inc.zone.code,
-    zone_name: inc.zone.name,
-    status: inc.status,
+  return ranked.map(({ incident, pScore, riskScore, occupied, criticalSince, durationBonus, nlpBonus }, index) => ({
+    rank: index + 1,
+    incident_id: incident.id,
+    zone_id: incident.zoneId,
+    zone_code: incident.zone.code,
+    zone_name: incident.zone.name,
+    status: incident.status,
     risk_score: riskScore,
-    priority_score: pScore,
+    priority_score: Math.round(pScore * 100) / 100,
     occupancy: occupied,
     critical_duration_seconds: Math.round((Date.now() - new Date(criticalSince).getTime()) / 1000),
-    primary_hazard: inc.primaryHazard ?? (inc.hazard as HazardType) ?? "NONE",
-    started_at: inc.startedAt ?? inc.openedAt,
-    acknowledged_at: inc.acknowledgedAt,
+    primary_hazard: incident.primaryHazard ?? (incident.hazard as HazardType) ?? "NONE",
+    started_at: incident.startedAt ?? incident.openedAt,
+    acknowledged_at: incident.acknowledgedAt,
+    nlp_advisory_bonus: nlpBonus,
     ranking_reason: rankingReason({
-      zoneName: inc.zone.name,
-      rank: idx + 1,
+      zoneName: incident.zone.name,
+      rank: index + 1,
       riskScore,
       occupied,
-      primaryHazard: (inc.primaryHazard ?? inc.hazard ?? "NONE") as HazardType,
+      primaryHazard: (incident.primaryHazard ?? incident.hazard ?? "NONE") as HazardType,
       criticalSince: new Date(criticalSince),
       durationBonus,
-      hasNlpBonus
+      hasNlpBonus: nlpBonus > 0,
     }),
   }));
 }
@@ -152,7 +179,7 @@ export async function incidentTimeline(incidentId: string) {
   if (!incident) return null;
   const events = await c.incident_events
     .find({ incidentId }, { projection: { _id: 0 } })
-    .sort({ occurredAt: 1 })
+    .sort({ occurredAt: 1, _id: 1 })
     .toArray();
   return { incident, events };
 }
