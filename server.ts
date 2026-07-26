@@ -16,7 +16,7 @@ const handler = app.getRequestHandler();
 async function sendSnapshot(socket: WebSocket) {
   const c = await collections();
   const [zones, incidents, queue] = await Promise.all([
-    c.zones.find({ configured: true }, { projection: { _id: 0, apiKeyHash: 0 } }).toArray(),
+    c.zones.find({ configured: true }, { projection: { _id: 0, apiKeyHash: 0 } }).sort({ code: 1 }).toArray(),
     c.incidents.find({ active: true }, { projection: { _id: 0 } }).toArray(),
     priorityQueue(),
   ]);

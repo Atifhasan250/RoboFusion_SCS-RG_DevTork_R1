@@ -62,6 +62,7 @@ export function RobofusionProvider({ children }: { children: ReactNode }) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttempts = useRef(0);
   const reconnectTimer = useRef<number | null>(null);
+  const [hydrated, setHydrated] = useState(false);
 
   // Initialize auth from session storage if possible
   useEffect(() => {
@@ -73,6 +74,7 @@ export function RobofusionProvider({ children }: { children: ReactNode }) {
         setCsrfToken(storedCsrf);
       } catch (e) {}
     }
+    setHydrated(true);
   }, []);
 
   const connectWs = useCallback(() => {
@@ -290,6 +292,8 @@ export function RobofusionProvider({ children }: { children: ReactNode }) {
       return false;
     }
   };
+
+  if (!hydrated) return null;
 
   return (
     <Context.Provider value={{ zones, incidents, user, csrfToken, wsStatus, notifications, priorityQueue, systemHealth, login, logout, acknowledgeIncident, reportNote, toggleOverride, addNotification, removeNotification }}>
